@@ -1,0 +1,11 @@
+# Local Superpowers workflow artifacts
+docs/superpowers/specs/
+docs/superpowers/plans/
+
+# Disposable QEMU state and release artifacts
+tests/integration/.runtime/
+dist/
+
+# Python verification caches
+__pycache__/
+*.py[cod]

@@ -1,0 +1,9 @@
+{
+  "linux": "fixture-linux-kernel",
+  "initrd": "fixture-initramfs",
+  "uname": "6.15.7-arch1-1",
+  "cmdline": "rd.luks.name=11111111-2222-3333-4444-555555555555=cryptroot rd.luks.options=11111111-2222-3333-4444-555555555555=discard root=/dev/mapper/cryptroot rw quiet splash",
+  "osrel_current": "VERSION_ID=6.15.7-arch1-1~current\nNAME=\"Spawn Arch\"\nID=spawn-arch\nPRETTY_NAME=\"Spawn Arch (current)\"",
+  "osrel_last_good": "NAME=\"Spawn Arch\"\nID=\"spawn-arch\"\nPRETTY_NAME=\"Spawn Arch (last-good)\"\nVERSION_ID=6.15.7-arch1-1~lg",
+  "osrel_last_good_template": "NAME=\"Spawn Arch\"\nID=\"spawn-arch\"\nPRETTY_NAME=\"Spawn Arch (last-good)\"\nVERSION_ID=\"lg\""
+}

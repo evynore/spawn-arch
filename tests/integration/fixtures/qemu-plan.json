@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "machine": {
+    "firmware": "UEFI/OVMF",
+    "memory_mib": 8192,
+    "target": {
+      "format": "qcow2",
+      "virtual_size_bytes": 103079215104,
+      "serial": "SPAWNARCH-TARGET",
+      "guest_by_id": "/dev/disk/by-id/virtio-SPAWNARCH-TARGET"
+    },
+    "sentinel": {
+      "format": "raw",
+      "virtual_size_bytes": 4294967296,
+      "serial": "WINDOWS-SENTINEL",
+      "read_only": true,
+      "partitions": ["Windows ESP", "Windows Data"]
+    },
+    "host_block_passthrough": false
+  },
+  "scenarios": ["install", "update-recovery", "rollback"],
+  "power_loss_windows": [
+    "state_temp",
+    "last_good_temp",
+    "current_candidate",
+    "post_snapper_pre_state_commit"
+  ]
+}

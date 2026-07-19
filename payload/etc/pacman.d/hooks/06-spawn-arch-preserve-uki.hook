@@ -1,0 +1,21 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Type = Package
+Target = linux
+Target = linux-firmware
+Target = intel-ucode
+Target = nvidia-open
+Target = nvidia-utils
+Target = mkinitcpio
+Target = systemd
+Target = cryptsetup
+Target = btrfs-progs
+
+[Action]
+Description = Preserving the blessed UKI for boot-critical package changes
+When = PreTransaction
+Exec = /usr/local/lib/spawn-arch/preserve-uki.sh
+AbortOnFail
+NeedsTargets

@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+
+_installed_spawn_lib_dir="${SPAWN_LIB_DIR:-/usr/local/lib/spawn-arch}"
+# shellcheck source=payload/usr/local/lib/spawn-arch/verify.sh
+source "$_installed_spawn_lib_dir/verify.sh"
+# shellcheck source=payload/usr/local/lib/spawn-arch/rollback.sh
+source "$_installed_spawn_lib_dir/rollback.sh"
+# shellcheck source=payload/usr/local/lib/spawn-arch/windows-boot.sh
+source "$_installed_spawn_lib_dir/windows-boot.sh"
+
+installed_main() {
+  local command="${1:-}"
+
+  case "$command" in
+    status)
+      (($# == 1)) || return 64
+      verify_status
+      ;;
+    verify)
+      if (($# == 1)); then
+        verify_run
+      elif (($# == 2)) && [[ "$2" == --bless ]]; then
+        verify_and_bless
+      else
+        return 64
+      fi
+      ;;
+    snapshots)
+      if (($# == 2)) && [[ "$2" == list ]]; then
+        snapshots_list "$(boot_state_read)"
+      else
+        return 64
+      fi
+      ;;
+    rollback)
+      (($# == 2)) || return 64
+      rollback_main "$2"
+      ;;
+    windows-boot)
+      shift
+      cmd_windows_boot "$@"
+      ;;
+    *) return 64 ;;
+  esac
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  set -Eeuo pipefail
+  if ((EUID != 0)); then
+    die "installed state commands require root" 77
+    exit $?
+  fi
+  rollback_recover
+  installed_main "$@"
+fi

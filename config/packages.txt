@@ -1,0 +1,98 @@
+# Base and firmware
+base
+base-devel
+linux
+linux-firmware
+intel-ucode
+sof-firmware
+
+# Storage and installer utilities
+btrfs-progs
+dosfstools
+cryptsetup
+sudo
+git
+openssh
+ksshaskpass
+kwallet-pam
+curl
+jq
+ripgrep
+unzip
+pacman-contrib
+arch-audit
+zsh
+zsh-completions
+starship
+openai-codex
+nodejs
+rust
+protobuf
+
+# Plasma desktop
+plasma-meta
+plasma-login-manager
+dolphin
+konsole
+kate
+ark
+firefox
+chromium
+vivaldi
+vivaldi-ffmpeg-codecs
+zed
+telegram-desktop
+spectacle
+yakuake
+xdg-desktop-portal
+xdg-desktop-portal-kde
+noto-fonts
+noto-fonts-emoji
+ttf-liberation
+ttf-firacode-nerd
+
+# Audio, network, and platform
+pipewire
+pipewire-audio
+pipewire-alsa
+pipewire-pulse
+wireplumber
+rtkit
+networkmanager
+bluez
+bluez-utils
+firewalld
+firewall-config
+firewall-applet
+wireless-regdb
+
+# Graphical encrypted-root prompt
+plymouth
+breeze-plymouth
+
+# Containers
+docker
+docker-compose
+nvidia-container-toolkit
+
+# Recovery and power
+snapper
+snap-pac
+btrfs-assistant
+zram-generator
+power-profiles-daemon
+
+# Intel graphics and diagnostics
+mesa
+vulkan-intel
+intel-media-driver
+libva-utils
+mesa-utils
+vulkan-tools
+
+# NVIDIA on-demand graphics
+nvidia-open
+nvidia-utils
+nvidia-settings
+nvidia-prime
+switcheroo-control

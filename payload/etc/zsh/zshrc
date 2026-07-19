@@ -1,0 +1,8 @@
+if [[ -o interactive ]]; then
+  typeset -g _spawn_zsh_cache="${XDG_CACHE_HOME:-$HOME/.cache}/zsh"
+  mkdir -p -- "$_spawn_zsh_cache"
+  autoload -Uz compinit
+  compinit -d "$_spawn_zsh_cache/zcompdump"
+  unset _spawn_zsh_cache
+  eval "$(starship init zsh)"
+fi

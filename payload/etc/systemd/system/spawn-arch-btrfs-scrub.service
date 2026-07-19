@@ -1,0 +1,7 @@
+[Unit]
+Description=Scrub the root Btrfs filesystem
+ConditionPathIsMountPoint=/
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/btrfs scrub start -B /

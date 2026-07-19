@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+readonly REPO_ROOT
+# shellcheck source=lib/spawn-arch/common.sh
+source "$REPO_ROOT/lib/spawn-arch/common.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: ./spawn-arch <command> [arguments]
+
+Live ISO commands:
+  doctor                 Validate the live ISO and hardware environment
+  plan                   Build and dry-run a non-destructive install plan
+  install                Execute a confirmed install plan
+  verify [target-root]   Verify an installed target without modifying it
+  investigate            Write bounded readable and JSON diagnostic reports
+EOF
+}
+
+load_module() {
+  local module="$1"
+  local path="$REPO_ROOT/lib/spawn-arch/$module.sh"
+  [[ -r "$path" ]] || die "command module is unavailable: $module" 70
+  # shellcheck source=/dev/null
+  source "$path"
+}
+
+main() {
+  local command_name="${1:---help}"
+  if (($# > 0)); then
+    shift
+  fi
+
+  case "$command_name" in
+    -h | --help)
+      usage
+      ;;
+    doctor)
+      load_module preflight
+      cmd_doctor "$@"
+      ;;
+    plan)
+      load_module install
+      cmd_plan "$@"
+      ;;
+    install)
+      load_module install
+      cmd_install "$@"
+      ;;
+    verify)
+      load_module finalize
+      cmd_verify "$@"
+      ;;
+    investigate)
+      load_module investigate
+      cmd_investigate "$@"
+      ;;
+    *)
+      die_usage "unknown command: $command_name"
+      ;;
+  esac
+}
+
+main "$@"

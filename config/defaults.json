@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "hostname": "spawn",
+  "timezone": "Etc/UTC",
+  "keymap": "us",
+  "locale": {
+    "primary": "en_US.UTF-8",
+    "generated": [
+      "en_US.UTF-8",
+      "ru_RU.UTF-8"
+    ]
+  },
+  "archinstall": {
+    "minimum": "4.4.0",
+    "maximum_exclusive": "4.5.0",
+    "schema_commit": "3ece182d31dda7b14abd56d13abf3ff79a5717ae"
+  },
+  "storage": {
+    "esp_bytes": 2147483648,
+    "alignment_bytes": 1048576,
+    "minimum_root_bytes": 34359738368,
+    "btrfs_options": [
+      "noatime",
+      "compress=zstd:1",
+      "nodiscard"
+    ],
+    "subvolumes": [
+      "@",
+      "@home",
+      "@log",
+      "@pkg",
+      "@snapshots"
+    ]
+  },
+  "zram": {
+    "fraction_of_ram": 0.5,
+    "algorithm": "zstd",
+    "priority": 100
+  },
+  "snapper": {
+    "number_limit": 20,
+    "number_limit_important": 10,
+    "number_min_age": 3600,
+    "timeline": false
+  },
+  "boot": {
+    "timeout_seconds": 3,
+    "current_uki": "/boot/EFI/Linux/spawn-arch-current.efi",
+    "last_good_uki": "/boot/EFI/Linux/spawn-arch-last-good.efi"
+  }
+}

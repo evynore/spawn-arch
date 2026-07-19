@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-07-16T00:00:00Z",
+  "target": {
+    "device_at_plan_time": "/dev/nvme1n1",
+    "identity": {
+      "serial": "S7H0NX0W123456A",
+      "wwn_or_eui": "002538b111111111",
+      "size_bytes": 2000398934016,
+      "by_id": "/dev/disk/by-id/nvme-Samsung_SSD_990_PRO_2TB_S7H0NX0W123456A",
+      "logical_sector_bytes": 512
+    }
+  },
+  "storage": {
+    "geometry": {
+      "disk_bytes": 2000398934016,
+      "logical_sector_bytes": 512,
+      "esp": {"start_bytes": 1048576, "size_bytes": 2147483648},
+      "root": {"start_bytes": 2148532224, "size_bytes": 1998249263104}
+    },
+    "subvolumes": ["@", "@home", "@log", "@pkg", "@snapshots"]
+  },
+  "system": {
+    "hostname": "spawn",
+    "username": "evynore",
+    "timezone": "Etc/UTC",
+    "keymap": "us",
+    "locale": "en_US.UTF-8"
+  },
+  "archinstall": {
+    "version": "4.4.0",
+    "schema_commit": "3ece182d31dda7b14abd56d13abf3ff79a5717ae"
+  },
+  "source": {"commit": "0123456789abcdef0123456789abcdef01234567"}
+}

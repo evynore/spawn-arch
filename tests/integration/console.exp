@@ -1,0 +1,207 @@
+#!/usr/bin/expect -f
+
+proc fail {message {code 1}} {
+  puts stderr "spawn-arch console: $message"
+  exit $code
+}
+
+proc read_secret {path} {
+  if {[catch {open $path r} channel]} {
+    fail "cannot open a runtime secret" 66
+  }
+  set value [string trimright [read $channel] "\r\n"]
+  close $channel
+  if {$value eq ""} {
+    fail "runtime secret is empty" 65
+  }
+  return $value
+}
+
+proc send_secret {value} {
+  log_user 0
+  send -- "$value\r"
+  after 250
+  log_user 1
+}
+
+proc expect_marker {scenario timeout_seconds} {
+  set timeout $timeout_seconds
+  expect {
+    -re "__SPAWN_GUEST_DONE__:${scenario}:0" { return }
+    -re "__SPAWN_GUEST_DONE__:${scenario}:\\d+" {
+      fail "guest scenario failed: $expect_out(0,string)" 70
+    }
+    timeout { fail "guest scenario timed out: $scenario" 75 }
+    eof { fail "serial connection closed during: $scenario" 70 }
+  }
+}
+
+proc expect_poweroff {} {
+  set timeout 180
+  expect {
+    eof { return }
+    timeout { fail "guest did not power off cleanly" 75 }
+  }
+}
+
+proc mount_shares {} {
+  send -- {mkdir -p /run/spawn-source /run/spawn-exchange && mountpoint -q /run/spawn-source || mount -t 9p -o trans=virtio,version=9p2000.L,ro spawn_arch /run/spawn-source; mountpoint -q /run/spawn-exchange || mount -t 9p -o trans=virtio,version=9p2000.L spawn_exchange /run/spawn-exchange; printf '__SPAWN_MOUNTS__:%s\n' "$?"}
+  send -- "\r"
+  set timeout 60
+  expect {
+    -re {__SPAWN_MOUNTS__:0} { return }
+    -re {__SPAWN_MOUNTS__:[1-9][0-9]*} { fail "guest share mount failed" 70 }
+    timeout { fail "guest share mount timed out" 75 }
+    eof { fail "serial connection closed while mounting shares" 70 }
+  }
+}
+
+proc live_install {luks_password user_password} {
+  set timeout 300
+  expect {
+    -re {root@archiso[^\r\n]*# ?$} {}
+    -re {archiso login: ?$} {
+      send -- "root\r"
+      exp_continue
+    }
+    -re {Password: ?$} {
+      send -- "\r"
+      exp_continue
+    }
+    timeout { fail "Arch ISO serial root shell did not appear" 75 }
+    eof { fail "serial connection closed before the Arch ISO shell" 70 }
+  }
+  mount_shares
+  send -- "bash /run/spawn-source/tests/integration/guest-scenarios.sh live-install\r"
+  set timeout 900
+  expect {
+    -re {Type ERASE SPAWNARCH-TARGET to destroy the selected disk: ?$} {
+      send -- "ERASE SPAWNARCH-TARGET\r"
+    }
+    timeout { fail "exact disk confirmation prompt did not appear" 75 }
+    eof { fail "serial connection closed before disk confirmation" 70 }
+  }
+  expect {
+    -re {LUKS passphrase: ?$} { send_secret $luks_password }
+    timeout { fail "LUKS passphrase prompt did not appear" 75 }
+    eof { fail "serial connection closed before LUKS passphrase" 70 }
+  }
+  expect {
+    -re {Confirm LUKS passphrase: ?$} { send_secret $luks_password }
+    timeout { fail "LUKS confirmation prompt did not appear" 75 }
+    eof { fail "serial connection closed before LUKS confirmation" 70 }
+  }
+  expect {
+    -re {User password: ?$} { send_secret $user_password }
+    timeout { fail "user password prompt did not appear" 75 }
+    eof { fail "serial connection closed before user password" 70 }
+  }
+  expect {
+    -re {Confirm User password: ?$} { send_secret $user_password }
+    timeout { fail "user confirmation prompt did not appear" 75 }
+    eof { fail "serial connection closed before user confirmation" 70 }
+  }
+  expect_marker live-install 5400
+  send -- "sync; systemctl poweroff\r"
+  expect_poweroff
+}
+
+proc installed_login {luks_password user_password} {
+  set timeout 300
+  expect {
+    -re {Please enter passphrase for disk[^:]*: ?$} {
+      send_secret $luks_password
+      exp_continue
+    }
+    -re {Enter passphrase for[^:]*: ?$} {
+      send_secret $luks_password
+      exp_continue
+    }
+    -re {spawn login: ?$} { send -- "evynore\r" }
+    timeout { fail "installed LUKS/login sequence did not appear" 75 }
+    eof { fail "serial connection closed before installed login" 70 }
+  }
+  expect {
+    -re {Password: ?$} { send_secret $user_password }
+    timeout { fail "installed user password prompt did not appear" 75 }
+    eof { fail "serial connection closed before installed password" 70 }
+  }
+  expect {
+    -re {\$ ?$} {}
+    timeout { fail "installed user shell did not appear" 75 }
+    eof { fail "serial connection closed before installed shell" 70 }
+  }
+  send -- "sudo -v\r"
+  expect {
+    -re {password for evynore: ?$} { send_secret $user_password }
+    timeout { fail "sudo password prompt did not appear" 75 }
+    eof { fail "serial connection closed before sudo authentication" 70 }
+  }
+  expect {
+    -re {\$ ?$} {}
+    timeout { fail "sudo authentication did not return a shell" 75 }
+    eof { fail "serial connection closed after sudo authentication" 70 }
+  }
+}
+
+proc installed_scenario {scenario luks_password user_password} {
+  installed_login $luks_password $user_password
+  set guest_command [format {sudo bash -c 'mkdir -p /run/spawn-source /run/spawn-exchange; mountpoint -q /run/spawn-source || mount -t 9p -o trans=virtio,version=9p2000.L,ro spawn_arch /run/spawn-source; mountpoint -q /run/spawn-exchange || mount -t 9p -o trans=virtio,version=9p2000.L spawn_exchange /run/spawn-exchange; bash /run/spawn-source/tests/integration/guest-scenarios.sh %s'} $scenario]
+  send -- $guest_command
+  send -- "\r"
+  expect_marker $scenario 5400
+  send -- "sudo systemctl poweroff\r"
+  expect_poweroff
+}
+
+proc installed_power_trigger {scenario phase secrets_dir luks_password user_password} {
+  installed_login $luks_password $user_password
+  set runtime [file dirname $secrets_dir]
+  set marker "$runtime/exchange/power-$phase.ready"
+  file delete -force $marker
+  set guest_command [format {sudo bash -c 'mkdir -p /run/spawn-source /run/spawn-exchange; mountpoint -q /run/spawn-source || mount -t 9p -o trans=virtio,version=9p2000.L,ro spawn_arch /run/spawn-source; mountpoint -q /run/spawn-exchange || mount -t 9p -o trans=virtio,version=9p2000.L spawn_exchange /run/spawn-exchange; bash /run/spawn-source/tests/integration/guest-scenarios.sh %s'} $scenario]
+  send -- $guest_command
+  send -- "\r"
+  for {set attempt 0} {$attempt < 5400} {incr attempt} {
+    if {[file exists $marker] && [file size $marker] > 0} {
+      return
+    }
+    after 1000
+  }
+  fail "power checkpoint did not become ready: $phase" 75
+}
+
+if {$argc != 4} {
+  fail "usage: console.exp MODE SERIAL_SOCKET SECRETS_DIR TRANSCRIPT" 64
+}
+set mode [lindex $argv 0]
+set serial_socket [lindex $argv 1]
+set secrets_dir [lindex $argv 2]
+set transcript [lindex $argv 3]
+set luks_password [read_secret "$secrets_dir/luks-passphrase"]
+set user_password [read_secret "$secrets_dir/user-password"]
+
+log_file -noappend $transcript
+match_max 1048576
+spawn -noecho socat STDIO "UNIX-CONNECT:$serial_socket"
+
+switch -- $mode {
+  live-install { live_install $luks_password $user_password }
+  first-boot -
+  update-stage -
+  update-bless -
+  update-allow -
+  rescue-stage -
+  rollback -
+  rollback-bless -
+  inspect-state-temp -
+  inspect-last-good-temp -
+  inspect-current-candidate -
+  inspect-post-snapper { installed_scenario $mode $luks_password $user_password }
+  power-state-temp { installed_power_trigger $mode state_temp $secrets_dir $luks_password $user_password }
+  power-last-good-temp { installed_power_trigger $mode last_good_temp $secrets_dir $luks_password $user_password }
+  power-current-candidate { installed_power_trigger $mode current_candidate $secrets_dir $luks_password $user_password }
+  power-post-snapper { installed_power_trigger $mode post_snapper_pre_state_commit $secrets_dir $luks_password $user_password }
+  default { fail "unknown console mode: $mode" 64 }
+}
+exit 0

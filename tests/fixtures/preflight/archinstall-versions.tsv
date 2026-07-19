@@ -1,0 +1,11 @@
+# version	expected
+4.4	accept
+4.4.0	accept
+4.4.37	accept
+4.4.0-1	accept
+4.4.0rc1	accept
+4.3.99	reject
+4.5.0	reject
+5.0.0	reject
+4.x.0	reject
+v4.4.0	reject

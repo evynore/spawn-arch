@@ -1,0 +1,7 @@
+UUID=BTRFS-UUID / btrfs rw,relatime,ssd,space_cache=v2,subvolid=256,subvol=/@ 0 0
+UUID=BTRFS-UUID /home btrfs rw,relatime,ssd,space_cache=v2,subvolid=257,subvol=/@home 0 0
+UUID=BTRFS-UUID /var/log btrfs rw,relatime,ssd,space_cache=v2,subvolid=258,subvol=/@log 0 0
+UUID=BTRFS-UUID /var/cache/pacman/pkg btrfs rw,relatime,ssd,space_cache=v2,subvolid=259,subvol=/@pkg 0 0
+UUID=BTRFS-UUID /.snapshots btrfs rw,relatime,ssd,space_cache=v2,subvolid=260,subvol=/@snapshots 0 0
+UUID=ESP-UUID /boot vfat rw,relatime,fmask=0022,dmask=0022 0 2
+/dev/zram0 none swap defaults,pri=100 0 0

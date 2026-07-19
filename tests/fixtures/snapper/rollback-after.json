@@ -1,0 +1,69 @@
+{
+  "root": [
+    {
+      "number": 0,
+      "default": false,
+      "active": true,
+      "date": "2026-07-16 00:00:00",
+      "user": "root",
+      "cleanup": "",
+      "description": "current",
+      "userdata": "",
+      "read-only": false,
+      "pre-number": 0,
+      "post-number": 0
+    },
+    {
+      "number": 7394,
+      "default": false,
+      "active": false,
+      "date": "2026-07-16 00:01:00",
+      "user": "root",
+      "cleanup": "number",
+      "description": "pacman -Syu",
+      "userdata": "important=yes",
+      "read-only": true,
+      "pre-number": 0,
+      "post-number": 7395
+    },
+    {
+      "number": 7395,
+      "default": false,
+      "active": false,
+      "date": "2026-07-16 00:02:00",
+      "user": "root",
+      "cleanup": "number",
+      "description": "linux systemd",
+      "userdata": "important=yes",
+      "read-only": true,
+      "pre-number": 7394,
+      "post-number": 0
+    },
+    {
+      "number": 7400,
+      "default": false,
+      "active": false,
+      "date": "2026-07-16 00:03:00",
+      "user": "root",
+      "cleanup": "number",
+      "description": "rollback safety",
+      "userdata": "important=yes",
+      "read-only": true,
+      "pre-number": 0,
+      "post-number": 0
+    },
+    {
+      "number": 7402,
+      "default": true,
+      "active": false,
+      "date": "2026-07-16 00:03:01",
+      "user": "root",
+      "cleanup": "number",
+      "description": "rollback root",
+      "userdata": "important=yes",
+      "read-only": false,
+      "pre-number": 0,
+      "post-number": 0
+    }
+  ]
+}

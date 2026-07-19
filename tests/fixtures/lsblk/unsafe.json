@@ -1,0 +1,40 @@
+{
+  "disks": [
+    {
+      "path": "/dev/nvme0n1", "kname": "nvme0n1", "size_bytes": 100000000000,
+      "logical_sector_bytes": 512, "model": "mounted", "serial": "MOUNTED",
+      "wwn": null, "eui": null, "read_only": false, "removable": false,
+      "mountpoints": ["/mnt/data"], "descendant_paths": ["/dev/nvme0n1"],
+      "holders": [], "by_id": ["/dev/disk/by-id/nvme-mounted"]
+    },
+    {
+      "path": "/dev/nvme1n1", "kname": "nvme1n1", "size_bytes": 100000000000,
+      "logical_sector_bytes": 512, "model": "holder", "serial": "HOLDER",
+      "wwn": null, "eui": null, "read_only": false, "removable": false,
+      "mountpoints": [], "descendant_paths": ["/dev/nvme1n1"],
+      "holders": ["/dev/dm-0"], "by_id": ["/dev/disk/by-id/nvme-holder"]
+    },
+    {
+      "path": "/dev/sdb", "kname": "sdb", "size_bytes": 100000000000,
+      "logical_sector_bytes": 512, "model": "removable", "serial": "REMOVABLE",
+      "wwn": null, "eui": null, "read_only": false, "removable": true,
+      "mountpoints": [], "descendant_paths": ["/dev/sdb"],
+      "holders": [], "by_id": ["/dev/disk/by-id/usb-removable"]
+    },
+    {
+      "path": "/dev/sdc", "kname": "sdc", "size_bytes": 100000000000,
+      "logical_sector_bytes": 512, "model": "readonly", "serial": "READONLY",
+      "wwn": null, "eui": null, "read_only": true, "removable": false,
+      "mountpoints": [], "descendant_paths": ["/dev/sdc"],
+      "holders": [], "by_id": ["/dev/disk/by-id/scsi-readonly"]
+    },
+    {
+      "path": "/dev/sda", "kname": "sda", "size_bytes": 100000000000,
+      "logical_sector_bytes": 512, "model": "live", "serial": "LIVE",
+      "wwn": null, "eui": null, "read_only": false, "removable": false,
+      "mountpoints": [], "descendant_paths": ["/dev/sda", "/dev/sda1"],
+      "holders": [], "by_id": ["/dev/disk/by-id/scsi-live"]
+    }
+  ],
+  "live_devices": ["/dev/sda", "/dev/sda1"]
+}

@@ -1,0 +1,37 @@
+{
+  "disks": [
+    {
+      "path": "/dev/nvme0n1",
+      "kname": "nvme0n1",
+      "size_bytes": 2000398934016,
+      "logical_sector_bytes": 512,
+      "model": "Samsung SSD 990 PRO 2TB",
+      "serial": "S7H0NX0W123456A",
+      "wwn": "eui.002538b111111111",
+      "eui": "002538b111111111",
+      "read_only": false,
+      "removable": false,
+      "mountpoints": [],
+      "descendant_paths": ["/dev/nvme0n1"],
+      "holders": [],
+      "by_id": ["/dev/disk/by-id/nvme-Samsung_SSD_990_PRO_2TB_S7H0NX0W123456A"]
+    },
+    {
+      "path": "/dev/nvme1n1",
+      "kname": "nvme1n1",
+      "size_bytes": 1000204886016,
+      "logical_sector_bytes": 512,
+      "model": "WD PC SN740",
+      "serial": "WINDOWS123456",
+      "wwn": "eui.0011223344556677",
+      "eui": "0011223344556677",
+      "read_only": false,
+      "removable": false,
+      "mountpoints": [],
+      "descendant_paths": ["/dev/nvme1n1", "/dev/nvme1n1p1"],
+      "holders": [],
+      "by_id": ["/dev/disk/by-id/nvme-WD_PC_SN740_WINDOWS123456"]
+    }
+  ],
+  "live_devices": ["/dev/sda", "/dev/sda1"]
+}

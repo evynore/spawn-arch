@@ -1,0 +1,6 @@
+UUID=BTRFS-UUID / btrfs noatime,compress=zstd:1,nodiscard 0 0
+UUID=BTRFS-UUID /home btrfs noatime,compress=zstd:1,nodiscard,subvol=@home 0 0
+UUID=BTRFS-UUID /var/log btrfs noatime,compress=zstd:1,nodiscard,subvol=@log 0 0
+UUID=BTRFS-UUID /var/cache/pacman/pkg btrfs noatime,compress=zstd:1,nodiscard,subvol=@pkg 0 0
+UUID=BTRFS-UUID /.snapshots btrfs noatime,compress=zstd:1,nodiscard,subvol=@snapshots 0 0
+UUID=ESP-UUID /boot vfat fmask=0077,dmask=0077 0 2
