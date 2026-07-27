@@ -153,7 +153,7 @@ nvme_controller() {
   printf '%s\n' "${BASH_REMATCH[1]}"
 }
 
-nvme_supports_overwrite() {
+nvme_sanitize_action() {
   local controller="$1"
   local json sanicap
 
@@ -163,7 +163,15 @@ nvme_supports_overwrite() {
     <<<"$json")"
 
   [[ "$sanicap" =~ ^(0x)?[0-9A-Fa-f]+$ ]] || return 1
-  (((sanicap & 0x4) != 0))
+  if (((sanicap & 0x4) != 0)); then
+    printf '%s\n' start-overwrite
+  elif (((sanicap & 0x2) != 0)); then
+    printf '%s\n' start-block-erase
+  elif (((sanicap & 0x1) != 0)); then
+    printf '%s\n' start-crypto-erase
+  else
+    return 1
+  fi
 }
 
 wait_for_nvme_sanitize() {
@@ -213,7 +221,7 @@ wait_for_nvme_sanitize() {
 
 nvme_secure_erase() {
   local namespace="$1"
-  local controller
+  local action controller
 
   require_command nvme
   if ! controller="$(nvme_controller "$namespace")"; then
@@ -221,12 +229,13 @@ nvme_secure_erase() {
     return 1
   fi
 
-  if ! nvme_supports_overwrite "$controller"; then
-    error 'NVMe controller does not support overwrite sanitize.'
+  if ! action="$(nvme_sanitize_action "$controller")"; then
+    error 'NVMe controller does not support a sanitize operation.'
     return 1
   fi
 
-  nvme sanitize "$controller" --sanact=start-overwrite
+  info "NVMe Sanitize action: ${action#start-}."
+  nvme sanitize "$controller" "--sanact=$action"
   wait_for_nvme_sanitize "$controller"
 }
 

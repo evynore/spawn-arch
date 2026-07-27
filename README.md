@@ -29,9 +29,10 @@ Two methods are available:
    system with `dd`. It can take a long time and does not guarantee clearing
    remapped or reserved NAND blocks on an SSD.
 2. **Firmware secure erase** uses ATA Secure Erase for a directly attached SATA
-   SSD or NVMe Sanitize overwrite for an NVMe SSD. It rejects USB, SAS, RAID,
-   unsupported, and frozen SATA devices. A frozen SATA drive must be power-cycled
-   before the firmware command can run.
+   SSD or the strongest NVMe Sanitize action advertised by an NVMe SSD
+   (overwrite, block erase, then crypto erase). It rejects USB, SAS, RAID,
+   and unsupported or frozen SATA devices. A frozen SATA drive must be
+   power-cycled before the firmware command can run.
 
 ## Installation from the official Arch ISO
 

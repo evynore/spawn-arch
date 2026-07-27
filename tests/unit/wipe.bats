@@ -182,7 +182,16 @@ EOF
   [[ "$output" == *'nvme sanitize /dev/nvme0 --sanact=start-overwrite'* ]]
 }
 
-@test "NVMe without overwrite support never starts sanitize" {
+@test "NVMe block erase sanitize is used when overwrite is unavailable" {
+  NVME_SANICAP=2
+  nvme_secure_erase /dev/nvme0n1
+
+  run cat "$CALL_LOG"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'nvme sanitize /dev/nvme0 --sanact=start-block-erase'* ]]
+}
+
+@test "NVMe without any sanitize support never starts sanitize" {
   NVME_SANICAP=0
   if nvme_secure_erase /dev/nvme0n1; then
     false
