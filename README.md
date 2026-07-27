@@ -10,6 +10,29 @@ It is intentionally fail-closed around disk identity and boot state.
 This repository is not a generic distribution installer. Read the generated plan
 before authorizing the destructive step.
 
+## Wiping a dedicated SSD
+
+`wipe.sh` is a separate destructive utility for use from the Arch ISO. Boot the
+target laptop from external media, then run it as root:
+
+```console
+./wipe.sh
+```
+
+The utility shows whole disks with their device path, size, transport, and
+model. Select a disk and method, verify the details, then confirm once. The
+operation is irreversible; do not select the live USB device.
+
+Two methods are available:
+
+1. **Full zero pass** writes zeroes to every byte addressable by the operating
+   system with `dd`. It can take a long time and does not guarantee clearing
+   remapped or reserved NAND blocks on an SSD.
+2. **Firmware secure erase** uses ATA Secure Erase for a directly attached SATA
+   SSD or NVMe Sanitize overwrite for an NVMe SSD. It rejects USB, SAS, RAID,
+   unsupported, and frozen SATA devices. A frozen SATA drive must be power-cycled
+   before the firmware command can run.
+
 ## Installation from the official Arch ISO
 
 Boot the current official Arch Linux ISO in UEFI mode. The live environment runs
