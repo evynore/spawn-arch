@@ -24,7 +24,7 @@ require_command() {
 }
 
 list_disks() {
-  lsblk --nodeps --paths --noheadings --output NAME,SIZE,TRAN,MODEL --type disk
+  lsblk --nodeps --paths --noheadings --output NAME,SIZE,TRAN,MODEL
 }
 
 disk_transport() {

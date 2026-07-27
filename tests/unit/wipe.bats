@@ -16,6 +16,15 @@ setup() {
   }
 
   lsblk() {
+    local argument
+
+    for argument in "$@"; do
+      if [[ "$argument" == --type ]]; then
+        printf '%s\n' 'lsblk: unrecognized option --type' >&2
+        return 1
+      fi
+    done
+
     if [[ "$*" == *'--output TRAN'* ]]; then
       printf '%s\n' "${DISK_TRANSPORT:-sata}"
       return 0
@@ -107,6 +116,13 @@ EOF
   if printf '\n' | confirm_wipe; then
     false
   fi
+}
+
+@test "disk listing uses options supported by Arch lsblk" {
+  run list_disks
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'/dev/nvme0n1'* ]]
 }
 
 @test "zero mode writes exactly the selected disk size and syncs" {
