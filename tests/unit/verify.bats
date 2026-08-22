@@ -16,7 +16,6 @@ setup() {
   mkdir -p \
     "$SPAWN_BOOT_ROOT/EFI/Linux" "$SPAWN_BOOT_ROOT/loader" \
     "$SPAWN_ETC_ROOT/kernel" "$SPAWN_ETC_ROOT/spawn-arch" \
-    "$SPAWN_ETC_ROOT/xdg/autostart" \
     "$SPAWN_ETC_ROOT/mkinitcpio.conf.d" "$SPAWN_ETC_ROOT/plymouth" \
     "$SPAWN_ETC_ROOT/systemd/system/docker.service.d" \
     "$SPAWN_ETC_ROOT/systemd/system/systemd-pcrlogin@.service.d" \
@@ -26,8 +25,6 @@ setup() {
   jq -r '.osrel_last_good' "$FAKE_SECTIONS_JSON" >"$SPAWN_ETC_ROOT/spawn-arch/uki-last-good.os-release"
   cp "$REPO_ROOT/payload/etc/mkinitcpio.conf.d/spawn-arch.conf" "$SPAWN_ETC_ROOT/mkinitcpio.conf.d/spawn-arch.conf"
   cp "$REPO_ROOT/payload/etc/plymouth/plymouthd.conf" "$SPAWN_ETC_ROOT/plymouth/plymouthd.conf"
-  printf '%s\n' '[Desktop Entry]' 'Type=Application' 'Exec=firewall-applet' \
-    >"$SPAWN_ETC_ROOT/xdg/autostart/firewall-applet.desktop"
   cp "$REPO_ROOT/payload/etc/systemd/system/docker.service.d/10-spawn-arch-ordering.conf" \
     "$SPAWN_ETC_ROOT/systemd/system/docker.service.d/10-spawn-arch-ordering.conf"
   cp "$REPO_ROOT/payload/etc/systemd/system/systemd-pcrlogin@.service.d/10-spawn-arch-disable.conf" \
@@ -40,8 +37,6 @@ setup() {
     'DISPLAY=:0' \
     'DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus' \
     'SSH_AUTH_SOCK=/run/user/1000/ssh-agent.socket' \
-    'SSH_ASKPASS=/usr/bin/ksshaskpass' \
-    'SSH_ASKPASS_REQUIRE=prefer' \
     'STARSHIP_CONFIG=/etc/starship.toml' \
     >"$SPAWN_PROC_ROOT/1234/environ"
   make_command_fakes
@@ -252,15 +247,23 @@ case "$name:$*" in
   "loginctl:list-sessions --no-legend --no-pager") printf '7 1000 evynore seat0 tty2\n' ;;
   "loginctl:show-session 7"*)
     if [[ "$FAKE_FAIL" == session ]]; then
-      printf '%s\n' 'Active=yes' 'Remote=no' 'Type=x11' 'Class=user' 'Name=evynore' 'Desktop=KDE' 'Leader=1234'
+      printf '%s\n' 'Active=yes' 'Remote=no' 'Type=x11' 'Class=user' 'Name=evynore' 'Desktop=Hyprland' 'Leader=1234'
     else
-      printf '%s\n' 'Active=yes' 'Remote=no' 'Type=wayland' 'Class=user' 'Name=evynore' 'Desktop=KDE' 'Leader=1234'
+      printf '%s\n' 'Active=yes' 'Remote=no' 'Type=wayland' 'Class=user' 'Name=evynore' 'Desktop=Hyprland' 'Leader=1234'
     fi
     ;;
   "id:-u evynore") printf '1000\n' ;;
   "id:-nG -- evynore") printf 'wheel\n' ;;
   "runuser:"*)
-    if [[ "$*" == *"systemctl --user is-active --quiet pipewire.service pipewire-pulse.service wireplumber.service"* ]]; then
+    if [[ "$*" == *"hyprctl -j monitors"* ]]; then
+      [[ "$FAKE_FAIL" != hyprland ]] && printf '%s\n' '[{"name":"eDP-1"}]'
+    elif [[ "$*" == *"hyprctl -j workspaces"* ]]; then
+      [[ "$FAKE_FAIL" != hyprland ]] && printf '%s\n' '[{"id":1,"name":"code"}]'
+    elif [[ "$*" == *"systemctl --user is-active --quiet spawn-quickshell.service"* ]]; then
+      [[ "$FAKE_FAIL" != hyprland ]]
+    elif [[ "$*" == *"busctl --user --no-pager introspect org.freedesktop.portal.Desktop"* ]]; then
+      [[ "$FAKE_FAIL" != hyprland ]]
+    elif [[ "$*" == *"systemctl --user is-active --quiet pipewire.service pipewire-pulse.service wireplumber.service"* ]]; then
       [[ "$FAKE_FAIL" != audio ]]
     elif [[ "$*" == *"systemctl --user is-active --quiet ssh-agent.service"* ]]; then
       [[ "$FAKE_FAIL" != ssh_agent ]]
@@ -268,7 +271,7 @@ case "$name:$*" in
       [[ "$FAKE_FAIL" != ssh_agent ]] || exit 2
       exit 1
     elif [[ "$*" == *"ssh -G example.invalid"* ]]; then
-      [[ "$FAKE_FAIL" != ssh_wallet ]] || exit 1
+      [[ "$FAKE_FAIL" != ssh_agent_policy ]] || exit 1
       printf 'addkeystoagent yes\n'
     elif [[ "$*" == *"zsh -lic"* ]]; then
       [[ "$FAKE_FAIL" != shell ]]
@@ -303,7 +306,8 @@ FAKE
     .ok == true and .state_generation == 1 and
     ([.checks[] | select(.ok == false)] | length == 0) and
     ([.checks[].name] | length == 26) and
-    any(.checks[]; .name == "ssh_wallet" and .ok == true) and
+    any(.checks[]; .name == "hyprland_wayland" and .ok == true) and
+    any(.checks[]; .name == "ssh_agent_policy" and .ok == true) and
     any(.checks[]; .name == "shell" and .ok == true) and
     any(.checks[]; .name == "boot_ui" and .ok == true) and
     any(.checks[]; .name == "service_policy" and .ok == true)
@@ -318,7 +322,7 @@ FAKE
     'root:root_default'
     'luks:luks_mapping'
     'bootloader:bootloader'
-    'session:plasma_wayland'
+    'hyprland:hyprland_wayland'
     'intel_glx:intel_glx'
     'intel_vulkan:intel_vulkan'
     'prime:nvidia_prime'
@@ -330,7 +334,7 @@ FAKE
     'zram:zram'
     'audio:audio'
     'ssh_agent:ssh_agent'
-    'ssh_wallet:ssh_wallet'
+    'ssh_agent_policy:ssh_agent_policy'
     'shell:shell'
     'docker:docker'
     'firewall:firewall'

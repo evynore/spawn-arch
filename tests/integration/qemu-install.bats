@@ -24,7 +24,7 @@ load helpers/load
     .first_boot.ukis == ["spawn-arch-current", "spawn-arch-last-good"] and
     .first_boot.snapper_root == true and
     .first_boot.services == [
-      "NetworkManager", "bluetooth", "firewalld", "plasmalogin",
+      "NetworkManager", "bluetooth", "firewalld", "greetd",
       "switcheroo-control", "power-profiles-daemon", "docker", "arch-audit.timer"
     ] and
     .first_boot.security_baseline == {
@@ -37,10 +37,10 @@ load helpers/load
       sysctl: true
     } and
     .first_boot.developer_session_baseline == {
-      kwallet_ssh: true,
+      hyprland_profile: true,
       login_shell: "/usr/bin/zsh",
       starship_preset: "plain-text-symbols",
-      font: "FiraCode Nerd Font Mono",
+      font: "Inter + JetBrains Mono",
       user_dotfiles_untouched: true
     }
   '

@@ -1,0 +1,15 @@
+{
+  "positionX": "right",
+  "positionY": "top",
+  "layer": "overlay",
+  "control-center-layer": "top",
+  "control-center-margin-top": 56,
+  "notification-2fa-action": true,
+  "widgets": ["title", "dnd", "notifications"],
+  "widget-config": {
+    "title": {
+      "text": "Notifications",
+      "clear-all-button": true
+    }
+  }
+}

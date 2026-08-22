@@ -13,8 +13,6 @@ cryptsetup
 sudo
 git
 openssh
-ksshaskpass
-kwallet-pam
 curl
 jq
 ripgrep
@@ -29,27 +27,40 @@ nodejs
 rust
 protobuf
 
-# Plasma desktop
-plasma-meta
-plasma-login-manager
-dolphin
-konsole
-kate
-ark
+# Hyprland workstation
+hyprland
+uwsm
+greetd
+greetd-regreet
+cage
+quickshell
+hyprlauncher
+hyprlock
+hypridle
+hyprpolkitagent
+xdg-desktop-portal
+xdg-desktop-portal-hyprland
+xdg-desktop-portal-gtk
+swaync
+cliphist
+wl-clipboard
+hyprshot
+hyprpaper
+foot
+thunar
+gvfs
+tumbler
 firefox
 chromium
 vivaldi
 vivaldi-ffmpeg-codecs
 zed
 telegram-desktop
-spectacle
-yakuake
-xdg-desktop-portal
-xdg-desktop-portal-kde
 noto-fonts
 noto-fonts-emoji
 ttf-liberation
-ttf-firacode-nerd
+inter-font
+ttf-jetbrains-mono
 
 # Audio, network, and platform
 pipewire
@@ -63,7 +74,7 @@ bluez
 bluez-utils
 firewalld
 firewall-config
-firewall-applet
+brightnessctl
 wireless-regdb
 
 # Graphical encrypted-root prompt

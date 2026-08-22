@@ -109,11 +109,60 @@ setup() {
   ' "$PAYLOAD_ETC/docker/daemon.json"
 }
 
-@test "SSH agent and KWallet askpass use the managed session contract" {
+@test "greetd launches ReGreet in Cage and offers a UWSM-managed Hyprland session" {
+  local greetd="$PAYLOAD_ETC/greetd/config.toml"
+  local session="$REPO_ROOT/payload/usr/share/wayland-sessions/spawn-hyprland.desktop"
+  local uwsm_env="$PAYLOAD_ETC/skel/.config/uwsm/env"
+  local hypr_env="$PAYLOAD_ETC/skel/.config/uwsm/env-hyprland"
+
   diff -u <(printf '%s\n' \
-    'SSH_AUTH_SOCK=${XDG_RUNTIME_DIR}/ssh-agent.socket' \
-    'SSH_ASKPASS=/usr/bin/ksshaskpass' \
-    'SSH_ASKPASS_REQUIRE=prefer') \
+    '[terminal]' \
+    'vt = "next"' \
+    '' \
+    '[default_session]' \
+    'command = "env GTK_USE_PORTAL=0 GDK_DEBUG=no-portals dbus-run-session cage -s -mlast -d -- regreet"' \
+    'user = "greeter"') \
+    "$greetd"
+  grep -Fx 'Exec=uwsm start -N Hyprland -eD Hyprland -- Hyprland' "$session"
+  grep -Fx 'TryExec=uwsm' "$session"
+  grep -Fx 'DesktopNames=Hyprland' "$session"
+  grep -Fx 'export XCURSOR_SIZE=24' "$uwsm_env"
+  grep -Fx 'export MOZ_ENABLE_WAYLAND=1' "$uwsm_env"
+  grep -Fx 'export XDG_CURRENT_DESKTOP=Hyprland' "$hypr_env"
+  diff -u <(printf '%s\n' '[preferred]' 'default=hyprland;gtk') \
+    "$PAYLOAD_ETC/xdg/xdg-desktop-portal/hyprland-portals.conf"
+  run grep -E '^export AQ_DRM_DEVICES=' "$hypr_env"
+  [ "$status" -eq 1 ]
+}
+
+@test "Hyprland config exposes named workspaces, a centered launcher, and explicit game GPU modes" {
+  local hypr="$PAYLOAD_ETC/skel/.config/hypr/hyprland.lua"
+  local launcher="$PAYLOAD_ETC/skel/.config/hypr/hyprlauncher.conf"
+  local idle="$PAYLOAD_ETC/skel/.config/hypr/hypridle.conf"
+  local game="$PAYLOAD_ETC/skel/.local/bin/spawn-game"
+  local polkit="$PAYLOAD_ETC/systemd/user/spawn-hyprpolkitagent.service"
+  local target="$BATS_TEST_TMPDIR/target"
+
+  for workspace in code web agent comms game; do
+    grep -Fq "name:$workspace" "$hypr"
+  done
+  grep -Fq 'hl.bind(mainMod .. " + SPACE", hl.dsp.exec_cmd("hyprlauncher"))' "$hypr"
+  grep -Fq 'desktop_launch_prefix = uwsm app --' "$launcher"
+  grep -Fq 'lock_cmd = pidof hyprlock || hyprlock' "$idle"
+  grep -Fq 'hybrid) exec prime-run "$@" ;;' "$game"
+  grep -Fq 'dgpu) exec "$@" ;;' "$game"
+  grep -Fq -- '--filter label=com.spawn-arch.compute=true --quiet' "$game"
+  grep -Fx 'ExecStart=/usr/lib/hyprpolkitagent/hyprpolkitagent' "$polkit"
+
+  mkdir -p "$target"
+  load_lib payload
+  payload_install "$target"
+  [ -x "$target/etc/skel/.local/bin/spawn-game" ]
+}
+
+@test "SSH agent keeps a portable managed session contract without a desktop askpass dependency" {
+  diff -u <(printf '%s\n' \
+    'SSH_AUTH_SOCK=${XDG_RUNTIME_DIR}/ssh-agent.socket') \
     "$PAYLOAD_ETC/environment.d/10-ssh-agent.conf"
 
   diff -u <(printf '%s\n' \
@@ -134,7 +183,7 @@ setup() {
   grep -Fx '  eval "$(starship init zsh)"' "$zshrc"
   grep -Fx 'fi' "$zshrc"
 
-  run grep -R -E -i \
+  run grep -R -I -E -i \
     'oh-my-zsh|plugin manager|/home/[^/]+/\.zshrc|/root/\.zshrc|\.config/starship\.toml' \
     "$REPO_ROOT/payload"
   [ "$status" -eq 1 ]
@@ -182,7 +231,7 @@ setup() {
 }
 
 @test "payload contains no deferred or scope-expanding policy" {
-  run grep -R -E -i \
+  run grep -R -I -E -i \
     '(^|[^[:alnum:]])tlp([^[:alnum:]]|$)|hibernate|resume=|tpm|secure[ -]?boot|nvidia.{0,20}primary|rootflags=|subvolid=|subvol=@' \
     "$PAYLOAD_ETC"
   [ "$status" -eq 1 ]

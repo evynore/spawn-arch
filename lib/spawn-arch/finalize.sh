@@ -14,6 +14,7 @@ _load_finalize_dependency() {
 
 _load_finalize_dependency die common
 _load_finalize_dependency packages_json config
+_load_finalize_dependency assert_linux_kernel_version preflight
 _load_finalize_dependency runtime_init runtime-state
 _load_finalize_dependency payload_install payload
 _load_finalize_dependency target_storage_json target-storage
@@ -224,6 +225,17 @@ pacman_storage_assert_contract() {
     _finalize_contract_error 'pacman download user cannot traverse the package cache' || return $?
 }
 
+linux_kernel_assert_contract() {
+  local target_root="$1"
+  local package version
+
+  package="$(arch-chroot "$target_root" pacman -Q linux)" ||
+    _finalize_contract_error 'linux package is not installed' || return $?
+  version="$(awk '$1 == "linux" {print $2; exit}' <<<"$package")"
+  [[ -n "$version" ]] || _finalize_contract_error 'linux package version is unavailable' || return $?
+  assert_linux_kernel_version "$version"
+}
+
 _ensure_locale_gen() {
   local locale_gen="$1"
   local line normalized found_en=false found_ru=false temporary
@@ -301,7 +313,7 @@ workstation_policy_assert_contract() {
   local target_root="$1"
   local username="${2:-}"
   local repository_root="${REPO_ROOT:-$(cd -- "$_spawn_finalize_dir/../.." && pwd -P)}"
-  local applet group_members relative
+  local group_members relative
   local -a policy_files=(
     etc/docker/daemon.json
     etc/firewalld/zones/spawn-workstation.xml
@@ -339,13 +351,6 @@ workstation_policy_assert_contract() {
   group_members="$(awk -F: '$1 == "docker" {print $4; exit}' "$target_root/etc/group")"
   [[ ",$group_members," != *",$username,"* ]] ||
     _finalize_contract_error "installed user $username must not belong to the docker group" || return $?
-  applet="$target_root/etc/xdg/autostart/firewall-applet.desktop"
-  [[ -r "$applet" ]] ||
-    _finalize_contract_error 'packaged firewall-applet XDG autostart entry is unavailable' || return $?
-  grep -Eq '^Exec=(/usr/bin/)?firewall-applet([[:space:]]|$)' "$applet" ||
-    _finalize_contract_error 'firewall-applet XDG autostart command is invalid' || return $?
-  ! grep -Eqi '^Hidden[[:space:]]*=[[:space:]]*true[[:space:]]*$' "$applet" ||
-    _finalize_contract_error 'firewall-applet XDG autostart entry is disabled' || return $?
   arch-chroot "$target_root" dockerd --validate --config-file=/etc/docker/daemon.json >/dev/null || return $?
   [[ "$(arch-chroot "$target_root" firewall-offline-cmd --get-default-zone)" == spawn-workstation ]] ||
     _finalize_contract_error 'firewalld default zone is not spawn-workstation' || return $?
@@ -391,18 +396,153 @@ remove_archinstall_fallback_uki() {
 
 user_services_assert_contract() {
   local target_root="$1"
+  local unit
+  local -a units=(
+    ssh-agent.service
+    spawn-quickshell.service
+    spawn-hypridle.service
+    spawn-hyprpolkitagent.service
+    spawn-swaync.service
+    spawn-cliphist-text.service
+    spawn-cliphist-image.service
+    spawn-hyprpaper.service
+  )
 
-  arch-chroot "$target_root" systemctl --global is-enabled ssh-agent.service >/dev/null 2>&1 ||
-    _finalize_contract_error 'ssh-agent.service is not globally enabled' || return $?
+  for unit in "${units[@]}"; do
+    arch-chroot "$target_root" systemctl --global is-enabled "$unit" >/dev/null 2>&1 ||
+      _finalize_contract_error "$unit is not globally enabled" || return $?
+  done
   if arch-chroot "$target_root" systemctl is-enabled sshd.service >/dev/null 2>&1; then
     _finalize_contract_error 'sshd.service is enabled'
   fi
 }
 
-ssh_wallet_assert_contract() {
+desktop_profile_install() {
+  local target_root="$1"
+  local username="$2"
+  local account uid gid home relative source destination
+  local -a managed_directories=(
+    .config/uwsm
+    .config/hypr
+    .config/quickshell
+    .config/swaync
+    .local/share/wallpapers
+  )
+
+  account="$(awk -F: -v user="$username" '$1 == user { print; found=1; exit } END { if (!found) exit 1 }' \
+    "$target_root/etc/passwd")" || {
+    _finalize_contract_error "installed user is missing from /etc/passwd: $username"
+    return $?
+  }
+  IFS=: read -r _ _ uid gid _ home _ <<<"$account"
+  [[ "$uid" =~ ^[0-9]+$ && "$gid" =~ ^[0-9]+$ && "$home" == /home/* && "$home" != *'..'* ]] || {
+    _finalize_contract_error "installed user has an unsafe desktop-profile home: $username"
+    return $?
+  }
+  [[ -d "$target_root/etc/skel" ]] || {
+    _finalize_contract_error 'managed desktop profile is missing from /etc/skel'
+    return $?
+  }
+  if [[ ! -d "$target_root$home" ]]; then
+    install -d -m 0750 -- "$target_root$home" || return $?
+    arch-chroot "$target_root" chown "$uid:$gid" "$home" || return $?
+  fi
+
+  for relative in "${managed_directories[@]}"; do
+    source="$target_root/etc/skel/$relative"
+    destination="$target_root$home/$relative"
+    [[ -d "$source" ]] || {
+      _finalize_contract_error "managed desktop directory is missing: /etc/skel/$relative"
+      return $?
+    }
+    mkdir -p -- "$(dirname -- "$destination")" || return $?
+    if [[ -d "$destination" ]]; then
+      cp -a -- "$source/." "$destination/" || return $?
+    else
+      cp -a -- "$source" "$destination" || return $?
+    fi
+    arch-chroot "$target_root" chown -R "$uid:$gid" "$home/$relative" || return $?
+  done
+
+  source="$target_root/etc/skel/.local/bin/spawn-game"
+  destination="$target_root$home/.local/bin/spawn-game"
+  [[ -r "$source" ]] || {
+    _finalize_contract_error 'managed game launcher is missing from /etc/skel'
+    return $?
+  }
+  mkdir -p -- "$(dirname -- "$destination")" || return $?
+  install -m 0755 -- "$source" "$destination" || return $?
+  arch-chroot "$target_root" chown "$uid:$gid" "$home/.local/bin/spawn-game"
+}
+
+hyprland_profile_assert_contract() {
+  local target_root="$1"
+  local username="$2"
+  local repository_root="${REPO_ROOT:-$(cd -- "$_spawn_finalize_dir/../.." && pwd -P)}"
+  local account home relative
+  local -a system_files=(
+    etc/greetd/config.toml
+    etc/greetd/regreet.toml
+    etc/xdg/xdg-desktop-portal/hyprland-portals.conf
+    usr/share/wayland-sessions/spawn-hyprland.desktop
+    etc/systemd/user/spawn-quickshell.service
+    etc/systemd/user/spawn-hypridle.service
+    etc/systemd/user/spawn-hyprpolkitagent.service
+    etc/systemd/user/spawn-swaync.service
+    etc/systemd/user/spawn-cliphist-text.service
+    etc/systemd/user/spawn-cliphist-image.service
+    etc/systemd/user/spawn-hyprpaper.service
+  )
+  local -a user_files=(
+    .config/uwsm/env
+    .config/uwsm/env-hyprland
+    .config/hypr/hyprland.lua
+    .config/hypr/hypridle.conf
+    .config/hypr/hyprlauncher.conf
+    .config/hypr/hyprlock.conf
+    .config/hypr/hyprpaper.conf
+    .config/hypr/theme/hyprlock.conf
+    .config/quickshell/spawn-arch/shell.qml
+    .config/quickshell/spawn-arch/qmldir
+    .config/quickshell/spawn-arch/Panel.qml
+    .config/quickshell/spawn-arch/ControlCenter.qml
+    .config/quickshell/spawn-arch/Theme.qml
+    .config/swaync/config.json
+    .config/swaync/style.css
+    .config/swaync/swaync-colors.css
+    .config/swaync/swaync-colors-light.css
+    .local/bin/spawn-game
+    .local/share/wallpapers/spawn-bento.png
+  )
+
+  for relative in "${system_files[@]}"; do
+    cmp -s -- "$repository_root/payload/$relative" "$target_root/$relative" ||
+      _finalize_contract_error "managed Hyprland system file differs: /$relative" || return $?
+  done
+  account="$(awk -F: -v user="$username" '$1 == user { print; found=1; exit } END { if (!found) exit 1 }' \
+    "$target_root/etc/passwd")" || {
+    _finalize_contract_error "installed user is missing from /etc/passwd: $username"
+    return $?
+  }
+  IFS=: read -r _ _ _ _ _ home _ <<<"$account"
+  [[ "$home" == /home/* && "$home" != *'..'* ]] || {
+    _finalize_contract_error "installed user has an unsafe desktop-profile home: $username"
+    return $?
+  }
+  for relative in "${user_files[@]}"; do
+    cmp -s -- "$repository_root/payload/etc/skel/$relative" "$target_root/etc/skel/$relative" ||
+      _finalize_contract_error "managed Hyprland template differs: /etc/skel/$relative" || return $?
+    cmp -s -- "$target_root/etc/skel/$relative" "$target_root$home/$relative" ||
+      _finalize_contract_error "managed Hyprland user file differs: $home/$relative" || return $?
+  done
+  [[ -x "$target_root$home/.local/bin/spawn-game" ]] ||
+    _finalize_contract_error "managed game launcher is not executable: $home/.local/bin/spawn-game" || return $?
+}
+
+ssh_agent_assert_contract() {
   local target_root="$1"
   local repository_root="${REPO_ROOT:-$(cd -- "$_spawn_finalize_dir/../.." && pwd -P)}"
-  local pam_path relative effective_ssh
+  local relative effective_ssh
   local -a managed_files=(
     etc/environment.d/10-ssh-agent.conf
     etc/ssh/ssh_config.d/20-spawn-arch-agent.conf
@@ -412,21 +552,6 @@ ssh_wallet_assert_contract() {
     cmp -s -- "$repository_root/payload/$relative" "$target_root/$relative" ||
       _finalize_contract_error "managed SSH file differs: /$relative" || return $?
   done
-  [[ -x "$target_root/usr/bin/ksshaskpass" ]] ||
-    _finalize_contract_error '/usr/bin/ksshaskpass is missing or not executable' || return $?
-
-  if [[ -r "$target_root/etc/pam.d/plasmalogin" ]]; then
-    pam_path="$target_root/etc/pam.d/plasmalogin"
-  elif [[ -r "$target_root/usr/lib/pam.d/plasmalogin" ]]; then
-    pam_path="$target_root/usr/lib/pam.d/plasmalogin"
-  else
-    _finalize_contract_error 'effective plasmalogin PAM file is missing'
-    return $?
-  fi
-  grep -Eq '^[[:space:]]*-?auth[[:space:]].*pam_kwallet5\.so([[:space:]]|$)' "$pam_path" ||
-    _finalize_contract_error "effective plasmalogin PAM is missing auth pam_kwallet5.so: $pam_path" || return $?
-  grep -Eq '^[[:space:]]*-?session[[:space:]].*pam_kwallet5\.so([[:space:]]|$)' "$pam_path" ||
-    _finalize_contract_error "effective plasmalogin PAM is missing session pam_kwallet5.so: $pam_path" || return $?
   effective_ssh="$(arch-chroot "$target_root" ssh -G example.invalid 2>/dev/null)" ||
     _finalize_contract_error 'could not evaluate effective OpenSSH configuration' || return $?
   grep -Eq '^addkeystoagent[[:space:]]+(yes|true)$' <<<"$effective_ssh" ||
@@ -450,8 +575,10 @@ shell_assert_contract() {
   done
   [[ -x "$target_root/usr/bin/zsh" ]] ||
     _finalize_contract_error '/usr/bin/zsh is missing or not executable' || return $?
-  [[ -r "$target_root/usr/share/fonts/TTF/FiraCodeNerdFontMono-Regular.ttf" ]] ||
-    _finalize_contract_error 'FiraCode Nerd Font Mono regular face is missing' || return $?
+  [[ -r "$target_root/usr/share/fonts/inter/Inter.ttc" ]] ||
+    _finalize_contract_error 'Inter regular face is missing' || return $?
+  [[ -r "$target_root/usr/share/fonts/TTF/JetBrainsMono-Regular.ttf" ]] ||
+    _finalize_contract_error 'JetBrains Mono regular face is missing' || return $?
   passwd_shell="$(awk -F: -v user="$username" '$1 == user { print $7; found=1 } END { if (!found) exit 1 }' \
     "$target_root/etc/passwd")" ||
     _finalize_contract_error "installed user is missing from /etc/passwd: $username" || return $?
@@ -467,9 +594,19 @@ finalize_target() {
   local plan_json seed_id luks luks_uuid cmdline preset loader unit username
   local -a units=(
     NetworkManager.service bluetooth.service firewalld.service
-    plasmalogin.service switcheroo-control.service power-profiles-daemon.service
+    greetd.service switcheroo-control.service power-profiles-daemon.service
     docker.service arch-audit.timer
     fstrim.timer spawn-arch-btrfs-scrub.timer snapper-cleanup.timer
+  )
+  local -a user_units=(
+    ssh-agent.service
+    spawn-quickshell.service
+    spawn-hypridle.service
+    spawn-hyprpolkitagent.service
+    spawn-swaync.service
+    spawn-cliphist-text.service
+    spawn-cliphist-image.service
+    spawn-hyprpaper.service
   )
 
   target_root="$(readlink -f -- "$target_root")" || return $?
@@ -478,6 +615,8 @@ finalize_target() {
   plan_json="$(<"$plan_path")"
   username="$(jq -er '.system.username | select(type == "string" and length > 0)' <<<"$plan_json")" ||
     _finalize_contract_error 'plan has no valid system username' || return $?
+  _finalize_run 'validate installed Linux kernel version' \
+    linux_kernel_assert_contract "$target_root" || return $?
   _finalize_run 'load durable boot-state library' _ensure_boot_initialize || return $?
   _finalize_run 'rewrite and validate target fstab' \
     rewrite_fstab "$target_root/etc/fstab" "$target_root" || return $?
@@ -486,6 +625,8 @@ finalize_target() {
   _finalize_run 'normalize pacman storage permissions' \
     pacman_storage_prepare "$target_root" || return $?
   _finalize_run 'install managed payload' payload_install "$target_root" || return $?
+  _finalize_run 'install Hyprland profile into user home' \
+    desktop_profile_install "$target_root" "$username" || return $?
   _finalize_run 'remove legacy power-profile unit' \
     remove_legacy_power_profile_unit "$target_root" || return $?
   _finalize_run 'set closed firewalld zone' \
@@ -523,7 +664,9 @@ finalize_target() {
     arch-chroot "$target_root" usermod --shell /usr/bin/zsh "$username" || return $?
   _finalize_run 'validate wheel sudo policy' \
     arch-chroot "$target_root" visudo -cf /etc/sudoers.d/10-wheel || return $?
-  _finalize_run 'validate KWallet SSH contract' ssh_wallet_assert_contract "$target_root" || return $?
+  _finalize_run 'validate Hyprland desktop profile' \
+    hyprland_profile_assert_contract "$target_root" "$username" || return $?
+  _finalize_run 'validate SSH agent contract' ssh_agent_assert_contract "$target_root" || return $?
   _finalize_run 'validate Zsh and Starship contract' shell_assert_contract "$target_root" "$username" || return $?
   _finalize_run 'build current unified kernel image' arch-chroot "$target_root" mkinitcpio -p linux || return $?
   _finalize_run 'initialize durable boot artifacts' boot_initialize "$target_root" "$seed_id" "$cmdline" || return $?
@@ -533,8 +676,10 @@ finalize_target() {
   for unit in "${units[@]}"; do
     _finalize_run "enable system service $unit" arch-chroot "$target_root" systemctl enable "$unit" || return $?
   done
-  _finalize_run 'enable user SSH agent' \
-    arch-chroot "$target_root" systemctl --global enable ssh-agent.service || return $?
+  for unit in "${user_units[@]}"; do
+    _finalize_run "enable global user service $unit" \
+      arch-chroot "$target_root" systemctl --global enable "$unit" || return $?
+  done
   _finalize_run 'disable SSH server' arch-chroot "$target_root" systemctl disable sshd.service || return $?
   _finalize_run 'disable Snapper timeline' \
     arch-chroot "$target_root" systemctl disable snapper-timeline.timer || return $?
@@ -577,10 +722,13 @@ verify_target_offline() {
   if arch-chroot "$target_root" pacman -Q "${packages[@]}" >/dev/null 2>&1; then ok=true; else ok=false; fi
   _verification_add checks packages "$ok" 'approved package set is installed'
 
+  if linux_kernel_assert_contract "$target_root"; then ok=true; else ok=false; fi
+  _verification_add checks linux_kernel "$ok" 'installed Linux kernel is at least 7.2.0'
+
   if pacman_storage_assert_contract "$target_root" "$username"; then ok=true; else ok=false; fi
   _verification_add checks pacman_storage "$ok" 'package database and download cache are readable by their unprivileged consumers'
 
-  units=(NetworkManager bluetooth firewalld plasmalogin switcheroo-control power-profiles-daemon docker.service arch-audit.timer fstrim.timer spawn-arch-btrfs-scrub.timer snapper-cleanup.timer)
+  units=(NetworkManager bluetooth firewalld greetd switcheroo-control power-profiles-daemon docker.service arch-audit.timer fstrim.timer spawn-arch-btrfs-scrub.timer snapper-cleanup.timer)
   if arch-chroot "$target_root" systemctl is-enabled "${units[@]}" >/dev/null 2>&1; then ok=true; else ok=false; fi
   _verification_add checks services "$ok" 'approved units are enabled'
 
@@ -591,13 +739,16 @@ verify_target_offline() {
   _verification_add checks boot_ui "$ok" 'Breeze Plymouth is ordered before encrypted-root unlock'
 
   if user_services_assert_contract "$target_root"; then ok=true; else ok=false; fi
-  _verification_add checks user_services "$ok" 'SSH agent is globally enabled while sshd remains disabled'
+  _verification_add checks user_services "$ok" 'desktop-session helpers and SSH agent are globally enabled while sshd remains disabled'
 
-  if ssh_wallet_assert_contract "$target_root"; then ok=true; else ok=false; fi
-  _verification_add checks ssh_wallet "$ok" 'OpenSSH askpass, agent policy, and effective Plasma KWallet PAM integration validate'
+  if hyprland_profile_assert_contract "$target_root" "$username"; then ok=true; else ok=false; fi
+  _verification_add checks hyprland_profile "$ok" 'greetd, UWSM, Hyprland, Quickshell, SwayNC, and user profile files validate'
+
+  if ssh_agent_assert_contract "$target_root"; then ok=true; else ok=false; fi
+  _verification_add checks ssh_agent "$ok" 'OpenSSH agent policy and effective AddKeysToAgent integration validate'
 
   if shell_assert_contract "$target_root" "$username"; then ok=true; else ok=false; fi
-  _verification_add checks shell "$ok" 'login Zsh, managed Starship configuration, and FiraCode Nerd Font validate'
+  _verification_add checks shell "$ok" 'login Zsh, managed Starship configuration, Inter, and JetBrains Mono validate'
 
   root_status="$(arch-chroot "$target_root" passwd -S root 2>/dev/null || true)"
   if [[ "$root_status" =~ ^root[[:space:]]+L([[:space:]]|$) ]]; then ok=true; else ok=false; fi

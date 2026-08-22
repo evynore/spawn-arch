@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+usage() {
+  printf >&2 'Usage: spawn-game <hybrid|dgpu> <command> [args...]\n'
+}
+
+stop_compute_containers() {
+  local -a container_ids=()
+
+  command -v docker >/dev/null 2>&1 || return 0
+  sudo -v
+  mapfile -t container_ids < <(sudo docker ps --filter label=com.spawn-arch.compute=true --quiet)
+  ((${#container_ids[@]} == 0)) || sudo docker stop "${container_ids[@]}" >/dev/null
+}
+
+mode="${1:-}"
+[[ -n "$mode" ]] || {
+  usage
+  exit 64
+}
+shift
+[[ $# -gt 0 ]] || {
+  usage
+  exit 64
+}
+
+case "$mode" in
+  hybrid | dgpu) ;;
+  *)
+    usage
+    exit 64
+    ;;
+esac
+
+if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]] && command -v hyprctl >/dev/null 2>&1; then
+  hyprctl dispatch workspace name:game >/dev/null
+fi
+
+stop_compute_containers
+
+case "$mode" in
+  hybrid) exec prime-run "$@" ;;
+  dgpu) exec "$@" ;;
+esac

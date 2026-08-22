@@ -48,7 +48,7 @@ hardware_session_observations() {
     leader="$(_session_property "$properties" Leader)"
     [[ "$active" == yes && "$remote" == no && "$type" == wayland && "$class" == user ]] || continue
     [[ "$user" =~ ^[a-z_][a-z0-9_-]*$ && "$user" != root ]] || continue
-    [[ "$desktop" =~ ([Kk][Dd][Ee]|[Pp]lasma) && "$leader" =~ ^[1-9][0-9]*$ ]] || continue
+    [[ "${desktop,,}" == hyprland && "$leader" =~ ^[1-9][0-9]*$ ]] || continue
     uid="$(id -u "$user")" || continue
     [[ "$uid" =~ ^[1-9][0-9]*$ ]] || continue
     environment_path="${SPAWN_PROC_ROOT:-/proc}/$leader/environ"
@@ -67,7 +67,7 @@ for item in pathlib.Path(sys.argv[1]).read_bytes().split(b"\0"):
     key, value = item.split(b"=", 1)
     if key.decode("ascii", "strict") in {
         "XDG_RUNTIME_DIR", "WAYLAND_DISPLAY", "DISPLAY", "DBUS_SESSION_BUS_ADDRESS",
-        "SSH_AUTH_SOCK", "SSH_ASKPASS", "SSH_ASKPASS_REQUIRE", "STARSHIP_CONFIG"
+        "SSH_AUTH_SOCK", "STARSHIP_CONFIG"
     }:
         values[key.decode("ascii")] = value.decode("utf-8", "strict")
 runtime = f"/run/user/{sys.argv[2]}"
@@ -77,8 +77,6 @@ valid = (
     and re.fullmatch(r":[0-9]+(?:\.[0-9]+)?", values.get("DISPLAY", ""))
     and values.get("DBUS_SESSION_BUS_ADDRESS") == f"unix:path={runtime}/bus"
     and values.get("SSH_AUTH_SOCK") == f"{runtime}/ssh-agent.socket"
-    and values.get("SSH_ASKPASS") == "/usr/bin/ksshaskpass"
-    and values.get("SSH_ASKPASS_REQUIRE") == "prefer"
     and values.get("STARSHIP_CONFIG") == "/etc/starship.toml"
 )
 if not valid:
@@ -99,7 +97,7 @@ PY
 _hardware_run_in_session() {
   local session="$1"
   shift
-  local user runtime wayland display dbus ssh_auth_sock ssh_askpass ssh_askpass_require starship_config
+  local user runtime wayland display dbus ssh_auth_sock starship_config
 
   user="$(jq -r '.user' <<<"$session")"
   runtime="$(jq -r '.environment.XDG_RUNTIME_DIR' <<<"$session")"
@@ -107,8 +105,6 @@ _hardware_run_in_session() {
   display="$(jq -r '.environment.DISPLAY' <<<"$session")"
   dbus="$(jq -r '.environment.DBUS_SESSION_BUS_ADDRESS' <<<"$session")"
   ssh_auth_sock="$(jq -r '.environment.SSH_AUTH_SOCK' <<<"$session")"
-  ssh_askpass="$(jq -r '.environment.SSH_ASKPASS' <<<"$session")"
-  ssh_askpass_require="$(jq -r '.environment.SSH_ASKPASS_REQUIRE' <<<"$session")"
   starship_config="$(jq -r '.environment.STARSHIP_CONFIG' <<<"$session")"
   runuser -u "$user" -- env -i \
     "XDG_RUNTIME_DIR=$runtime" \
@@ -116,8 +112,6 @@ _hardware_run_in_session() {
     "DISPLAY=$display" \
     "DBUS_SESSION_BUS_ADDRESS=$dbus" \
     "SSH_AUTH_SOCK=$ssh_auth_sock" \
-    "SSH_ASKPASS=$ssh_askpass" \
-    "SSH_ASKPASS_REQUIRE=$ssh_askpass_require" \
     "STARSHIP_CONFIG=$starship_config" \
     "$@"
 }
@@ -197,8 +191,22 @@ hardware_check_bootloader() {
   ' >/dev/null <<<"$list"
 }
 
-hardware_check_plasma_wayland() {
-  jq -e '.user != "root" and .uid >= 1 and (.environment.WAYLAND_DISPLAY | startswith("wayland-"))' >/dev/null <<<"$1"
+hardware_check_hyprland_wayland() {
+  local session="$1"
+  local monitors workspaces
+
+  jq -e '.user != "root" and .uid >= 1 and (.environment.WAYLAND_DISPLAY | startswith("wayland-"))' \
+    >/dev/null <<<"$session" || return $?
+  monitors="$(_hardware_run_in_session "$session" hyprctl -j monitors)" || return $?
+  jq -e 'type == "array" and length >= 1' >/dev/null <<<"$monitors" || return $?
+  workspaces="$(_hardware_run_in_session "$session" hyprctl -j workspaces)" || return $?
+  jq -e 'type == "array"' >/dev/null <<<"$workspaces" || return $?
+  _hardware_run_in_session "$session" systemctl --user is-active --quiet \
+    spawn-quickshell.service spawn-hypridle.service spawn-hyprpolkitagent.service \
+    spawn-swaync.service spawn-cliphist-text.service spawn-cliphist-image.service \
+    spawn-hyprpaper.service || return $?
+  _hardware_run_in_session "$session" busctl --user --no-pager introspect \
+    org.freedesktop.portal.Desktop /org/freedesktop/portal/desktop >/dev/null
 }
 
 hardware_check_intel_glx() {
@@ -240,7 +248,7 @@ hardware_check_power_profile() {
 
 hardware_check_services() {
   systemctl is-active --quiet \
-    NetworkManager.service firewalld.service plasmalogin.service switcheroo-control.service
+    NetworkManager.service firewalld.service greetd.service switcheroo-control.service
 }
 
 hardware_check_boot_ui() {
@@ -291,14 +299,12 @@ hardware_check_ssh_agent() {
   [[ "$status" -eq 0 || "$status" -eq 1 ]]
 }
 
-hardware_check_ssh_wallet() {
+hardware_check_ssh_agent_policy() {
   local session="$1"
   local output
 
   jq -e '
-    .environment.SSH_AUTH_SOCK == (.environment.XDG_RUNTIME_DIR + "/ssh-agent.socket") and
-    .environment.SSH_ASKPASS == "/usr/bin/ksshaskpass" and
-    .environment.SSH_ASKPASS_REQUIRE == "prefer"
+    .environment.SSH_AUTH_SOCK == (.environment.XDG_RUNTIME_DIR + "/ssh-agent.socket")
   ' >/dev/null <<<"$session" || return 65
   output="$(_hardware_run_in_session "$session" ssh -G example.invalid)" || return $?
   grep -Fxq 'addkeystoagent yes' <<<"$output"
@@ -337,7 +343,7 @@ hardware_check_docker() {
 }
 
 hardware_check_firewall() {
-  local applet etc_root services ports
+  local services ports
 
   systemctl is-active --quiet firewalld.service || return $?
   [[ "$(firewall-cmd --get-default-zone)" == spawn-workstation ]] || return 65
@@ -345,11 +351,6 @@ hardware_check_firewall() {
   services="$(firewall-cmd --zone=spawn-workstation --list-services)" || return $?
   ports="$(firewall-cmd --zone=spawn-workstation --list-ports)" || return $?
   [[ -z "$services" && -z "$ports" ]] || return 65
-  etc_root="$(installed_etc_root)"
-  applet="$etc_root/xdg/autostart/firewall-applet.desktop"
-  [[ -r "$applet" ]] || return 65
-  grep -Eq '^Exec=(/usr/bin/)?firewall-applet([[:space:]]|$)' "$applet" || return 65
-  ! grep -Eqi '^Hidden[[:space:]]*=[[:space:]]*true[[:space:]]*$' "$applet"
 }
 
 hardware_check_journal() {

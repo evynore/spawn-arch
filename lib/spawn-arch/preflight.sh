@@ -7,6 +7,44 @@ if ! declare -F die >/dev/null 2>&1; then
   unset _spawn_preflight_dir
 fi
 
+_linux_kernel_version_supported() {
+  local version="$1"
+  local major minor patch
+
+  if [[ ! "$version" =~ ^([0-9]+)\.([0-9]+)(\.([0-9]+))?([^0-9].*)?$ ]]; then
+    return 1
+  fi
+  major=$((10#${BASH_REMATCH[1]}))
+  minor=$((10#${BASH_REMATCH[2]}))
+  patch="${BASH_REMATCH[4]:-0}"
+  patch=$((10#$patch))
+
+  ((major > 7 || (major == 7 && (minor > 2 || (minor == 2 && patch >= 0)))))
+}
+
+assert_linux_kernel_version() {
+  local version="$1"
+
+  if ! _linux_kernel_version_supported "$version"; then
+    die "unsupported Linux kernel version: $version (required Linux kernel >= 7.2.0)" 65
+    return $?
+  fi
+}
+
+_linux_kernel_available_version() {
+  local metadata version
+
+  if [[ -n "${FAKE_LINUX_KERNEL_VERSION:-}" ]]; then
+    printf '%s\n' "$FAKE_LINUX_KERNEL_VERSION"
+    return 0
+  fi
+  pacman -Sy --noconfirm >/dev/null 2>&1 || return $?
+  metadata="$(pacman -Si linux 2>/dev/null)" || return $?
+  version="$(awk -F: '$1 ~ /^[[:space:]]*Version[[:space:]]*$/ {gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2; exit}' <<<"$metadata")"
+  [[ -n "$version" ]] || return 1
+  printf '%s\n' "$version"
+}
+
 _archinstall_version_supported() {
   local version="$1"
   local major minor
@@ -49,7 +87,7 @@ _archinstall_version() {
 
 _required_commands_check() {
   local -a required=(
-    archinstall bash curl findmnt git jq lsblk mountpoint python3 readlink sha256sum sync uname
+    archinstall bash curl findmnt git jq lsblk mountpoint pacman python3 readlink sha256sum sync uname
   )
   local -a missing=()
   local command_name
@@ -119,7 +157,8 @@ doctor_collect_json() {
   local machine="${FAKE_UNAME_M:-$(uname -m)}"
   local clock_epoch="${FAKE_CLOCK_EPOCH:-$(date -u +%s)}"
   local root_ok=false uefi_ok=false efivarfs_ok=false network_ok=false clock_ok=false
-  local version_ok=false commands_ok commands_detail archinstall_version="unavailable"
+  local version_ok=false kernel_ok=false commands_ok commands_detail
+  local archinstall_version="unavailable" linux_kernel_version="unavailable" discovered_kernel_version
   local hardware
 
   [[ "$effective_uid" == 0 ]] && root_ok=true
@@ -130,6 +169,12 @@ doctor_collect_json() {
 
   if archinstall_version="$(_archinstall_version)" && _archinstall_version_supported "$archinstall_version"; then
     version_ok=true
+  fi
+  if discovered_kernel_version="$(_linux_kernel_available_version)"; then
+    linux_kernel_version="$discovered_kernel_version"
+    if _linux_kernel_version_supported "$linux_kernel_version"; then
+      kernel_ok=true
+    fi
   fi
 
   IFS=$'\t' read -r commands_ok commands_detail < <(_required_commands_check)
@@ -142,9 +187,11 @@ doctor_collect_json() {
     --argjson network "$network_ok" \
     --argjson clock "$clock_ok" \
     --argjson version "$version_ok" \
+    --argjson kernel "$kernel_ok" \
     --argjson commands "$commands_ok" \
     --argjson arch "$([[ "$machine" == x86_64 ]] && printf true || printf false)" \
     --arg archinstall_version "$archinstall_version" \
+    --arg linux_kernel_version "$linux_kernel_version" \
     --arg commands_detail "$commands_detail" \
     --argjson hardware "$hardware" '
       def check($ok; $required; $detail):
@@ -157,6 +204,7 @@ doctor_collect_json() {
           network: check($network; true; "HTTPS access to archlinux.org"),
           clock: check($clock; true; "UTC clock is later than 2024-01-01"),
           archinstall_version: check($version; true; $archinstall_version),
+          linux_kernel: check($kernel; true; $linux_kernel_version),
           required_commands: check($commands; true; $commands_detail),
           x86_64: check($arch; true; "x86_64 userspace"),
           intel_cpu_hint: check($hardware.intel_cpu_hint; false; "Intel CPU target hint"),

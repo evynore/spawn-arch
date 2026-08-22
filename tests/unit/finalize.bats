@@ -12,32 +12,24 @@ setup() {
     "$SPAWN_RUNTIME_DIR" \
     "$TARGET_ROOT/etc/pam.d" \
     "$TARGET_ROOT/etc/xdg/autostart" \
+    "$TARGET_ROOT/home/evynore" \
     "$TARGET_ROOT/var/lib/pacman/local" \
     "$TARGET_ROOT/var/lib/pacman/sync" \
     "$TARGET_ROOT/var/cache/pacman/pkg" \
     "$TARGET_ROOT/usr/bin" \
     "$TARGET_ROOT/usr/lib/pam.d" \
-    "$TARGET_ROOT/usr/share/fonts/TTF"
+    "$TARGET_ROOT/usr/share/fonts/TTF" \
+    "$TARGET_ROOT/usr/share/fonts/inter"
   cp "$REPO_ROOT/tests/fixtures/archinstall/plan.json" "$PLAN_PATH"
   cp "$REPO_ROOT/tests/fixtures/fstab/archinstall.txt" "$TARGET_ROOT/etc/fstab"
   printf '#en_US.UTF-8 UTF-8\n#ru_RU.UTF-8 UTF-8\n' >"$TARGET_ROOT/etc/locale.gen"
-  printf '%s\n' \
-    '-auth optional pam_kwallet5.so' \
-    '-session optional pam_kwallet5.so auto_start' \
-    >"$TARGET_ROOT/etc/pam.d/plasmalogin"
-  cp "$TARGET_ROOT/etc/pam.d/plasmalogin" "$TARGET_ROOT/usr/lib/pam.d/plasmalogin"
   printf 'evynore:x:1000:1000::/home/evynore:/bin/bash\n' >"$TARGET_ROOT/etc/passwd"
   printf 'docker:x:971:\n' >"$TARGET_ROOT/etc/group"
-  printf '%s\n' \
-    '[Desktop Entry]' \
-    'Type=Application' \
-    'Exec=firewall-applet' \
-    >"$TARGET_ROOT/etc/xdg/autostart/firewall-applet.desktop"
-  install -m 0755 /dev/null "$TARGET_ROOT/usr/bin/ksshaskpass"
   install -m 0755 /dev/null "$TARGET_ROOT/usr/bin/nvidia-container-runtime"
   install -m 0755 /dev/null "$TARGET_ROOT/usr/bin/zsh"
   install -m 0644 /dev/null \
-    "$TARGET_ROOT/usr/share/fonts/TTF/FiraCodeNerdFontMono-Regular.ttf"
+    "$TARGET_ROOT/usr/share/fonts/TTF/JetBrainsMono-Regular.ttf"
+  install -m 0644 /dev/null "$TARGET_ROOT/usr/share/fonts/inter/Inter.ttc"
   target_storage_json() {
     printf 'target-storage:%s\n' "$1" >>"$SPAWN_COMMAND_LOG"
     jq -n '{
@@ -96,6 +88,7 @@ case "$name:$*" in
   "arch-chroot:"*"pacman -Q tlp"* | \
   "arch-chroot:"*"pacman -Q auto-cpufreq"* | \
   "arch-chroot:"*"pacman -Q asusctl"*) exit 1 ;;
+  "arch-chroot:"*"pacman -Q linux") printf '%s\n' 'linux 7.2.1.arch1-1' ;;
   "arch-chroot:"*"snapper --no-dbus -c root list"*) exit 0 ;;
   "arch-chroot:"*"firewall-offline-cmd --get-default-zone"*) printf 'spawn-workstation\n' ;;
   "arch-chroot:"*"firewall-offline-cmd --get-log-denied"*) printf 'unicast\n' ;;
@@ -167,6 +160,18 @@ snapshot_tree() {
   find "$root" -type f -printf '%P\0' | sort -z | while IFS= read -r -d '' path; do
     printf '%s  %s\n' "$(sha256sum "$root/$path" | awk '{print $1}')" "$path"
   done
+}
+
+@test "installed kernel contract rejects Linux below 7.2" {
+  arch-chroot() {
+    [[ "$2 $3 $4" == "pacman -Q linux" ]] || return 1
+    printf '%s\n' 'linux 7.1.5-arch1-2'
+  }
+
+  run linux_kernel_assert_contract "$TARGET_ROOT"
+
+  [ "$status" -eq 65 ]
+  [[ "$output" == *"required Linux kernel >= 7.2.0"* ]]
 }
 
 @test "fstab rewrite follows the dynamic-default Btrfs contract" {
@@ -297,14 +302,12 @@ snapshot_tree() {
   [[ "$output" == *"must not belong to the docker group"* ]]
 }
 
-@test "workstation policy requires the packaged firewall applet autostart entry" {
+@test "workstation policy does not require a desktop-specific firewall applet" {
   payload_install "$TARGET_ROOT"
-  printf 'Hidden=true\n' >>"$TARGET_ROOT/etc/xdg/autostart/firewall-applet.desktop"
 
   run workstation_policy_assert_contract "$TARGET_ROOT" evynore
 
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"firewall-applet XDG autostart entry is disabled"* ]]
+  [ "$status" -eq 0 ]
 }
 
 @test "finalizer removes only the known Archinstall UKI after durable artifacts are initialized" {
@@ -320,21 +323,17 @@ snapshot_tree() {
   [ -e "$TARGET_ROOT/boot/EFI/Linux/spawn-arch-last-good.efi" ]
 }
 
-@test "KWallet PAM verification honors effective override and ignores comments" {
+@test "Hyprland profile deploys managed configuration to the existing Archinstall user" {
   payload_install "$TARGET_ROOT"
-  printf '%s\n' \
-    'auth optional pam_kwallet5.so' \
-    '# session optional pam_kwallet5.so auto_start' \
-    >"$TARGET_ROOT/etc/pam.d/plasmalogin"
 
-  run ssh_wallet_assert_contract "$TARGET_ROOT"
+  run desktop_profile_install "$TARGET_ROOT" evynore
 
-  [ "$status" -eq 65 ]
-  [[ "$output" == *'effective plasmalogin PAM is missing session pam_kwallet5.so'* ]]
-  [[ "$output" == *"$TARGET_ROOT/etc/pam.d/plasmalogin"* ]]
+  [ "$status" -eq 0 ]
+  [ -r "$TARGET_ROOT/home/evynore/.config/hypr/hyprland.lua" ]
+  [ -r "$TARGET_ROOT/home/evynore/.config/quickshell/spawn-arch/shell.qml" ]
+  [ -x "$TARGET_ROOT/home/evynore/.local/bin/spawn-game" ]
 
-  rm -- "$TARGET_ROOT/etc/pam.d/plasmalogin"
-  run ssh_wallet_assert_contract "$TARGET_ROOT"
+  run hyprland_profile_assert_contract "$TARGET_ROOT" evynore
 
   [ "$status" -eq 0 ]
 }
@@ -363,11 +362,13 @@ snapshot_tree() {
     .ok == true and
     ([.checks[].name] | index("fstab")) and
     ([.checks[].name] | index("packages")) and
+    ([.checks[].name] | index("linux_kernel")) and
     ([.checks[].name] | index("pacman_storage")) and
     ([.checks[].name] | index("boot_artifacts")) and
     ([.checks[].name] | index("workstation_policy")) and
     ([.checks[].name] | index("user_services")) and
-    ([.checks[].name] | index("ssh_wallet")) and
+    ([.checks[].name] | index("hyprland_profile")) and
+    ([.checks[].name] | index("ssh_agent")) and
     ([.checks[].name] | index("shell")) and
     ([.checks[].name] | index("luks2")) and
     ([.checks[] | select(.ok == false)] | length == 0)

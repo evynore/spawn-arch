@@ -1,7 +1,7 @@
 # spawn-arch
 
 `spawn-arch` is a narrowly scoped, auditable installer for one machine profile: an
-Intel + NVIDIA Optimus laptop with KDE Plasma, LUKS2, Btrfs, systemd-boot, and
+Intel + NVIDIA Optimus laptop with Hyprland, LUKS2, Btrfs, systemd-boot, and
 zram. Its balanced workstation baseline also pins PipeWire, a user-scoped
 OpenSSH agent, a local Docker daemon, a closed inbound firewall, bounded
 persistent logs, package vulnerability auditing, and low-risk kernel hardening.
@@ -58,11 +58,17 @@ as root.
    cd spawn-arch-v0.1.0
    ```
 
-4. Run the read-only environment and hardware checks:
+4. Run the non-destructive environment and hardware checks:
 
    ```console
    ./spawn-arch doctor
    ```
+
+   `doctor` refreshes the official package metadata in the live environment and
+   requires the stable `linux` candidate to be at least `7.2.0`. This is the
+   audio-topology baseline for this laptop. If that check fails, nothing has
+   touched the target disk: wait for Arch stable to publish the kernel and retry;
+   do not switch this profile to `core-testing` or an AUR mainline kernel.
 
 5. Build the non-destructive installation plan. Select only the intended Linux
    target SSD and answer the profile prompts:
@@ -134,7 +140,7 @@ as root.
    ```
 
 10. Select the new Linux disk in the firmware if necessary. Enter the `LUKS passphrase`
-    when prompted, then sign in to the `Plasma Wayland` session.
+    when prompted, then choose the `Spawn Hyprland` session in ReGreet.
 11. Run the physical acceptance checks below. If every required check succeeds,
     commit this boot as the known-good state:
 
@@ -187,30 +193,44 @@ available with `e`; append `plymouth.enable=0 disablehooks=plymouth` for a
 one-time text-mode recovery boot if the graphical prompt ever fails.
 
 PipeWire, PipeWire Pulse compatibility, ALSA integration, and WirePlumber are
-installed explicitly rather than inherited accidentally through Plasma. `rtkit`
-provides the realtime scheduling policy expected by the audio stack, and
-`wireless-regdb` supplies the kernel regulatory database. The
-OpenSSH agent is enabled as a systemd user service and uses
+installed explicitly as part of the workstation profile. `rtkit` provides the
+realtime scheduling policy expected by the audio stack, and `wireless-regdb`
+supplies the kernel regulatory database.
+
+The graphical login is `greetd` with ReGreet in Cage. The session itself is
+started by UWSM and consists of Hyprland for compositor/layout, Quickshell for
+the panel and compact control surface, SwayNC for notifications, and Hyprland
+helpers for lock, idle, wallpaper, polkit, clipboard, portals, screenshots, and
+file management. `SUPER+SPACE` opens Hyprlauncher in the centre of the screen;
+`SUPER+1` through `SUPER+5` select the persistent `code`, `web`, `agent`,
+`comms`, and `game` workspaces, while `SUPER+SHIFT+1` through `SUPER+SHIFT+5`
+move the focused window. The game workspace is intentionally borderless and
+gapless. Theme tokens drive the dark/light HIG-bento shell: Inter for interface
+text, JetBrains Mono for technical text, WCAG-checked contrast, and a restrained
+local wallpaper. The managed files are copied both to `/etc/skel` and to the
+Archinstall user's home at install time.
+
+The OpenSSH agent is enabled as a systemd user service and uses
 `$XDG_RUNTIME_DIR/ssh-agent.socket`; the SSH server remains disabled. Keys are
 never generated, copied, enumerated, or unlocked by the installer. OpenSSH uses
-`AddKeysToAgent yes`, and `ksshaskpass` can store an encrypted key's passphrase
-in KWallet only after the first use, when the user explicitly selects `Remember password`
-in the dialog. The private key remains a normal mode-0600 file under
-`~/.ssh`; KWallet stores only the remembered passphrase.
-
-Automatic reuse requires KWallet to be unlocked by a password-based Plasma login
-using the same password as the default wallet. Autologin, passwordless login,
-and fingerprint-only login do not provide that secret and are outside
-this guarantee. An empty agent is valid until a key is actually used; the
+`AddKeysToAgent yes`; there is deliberately no desktop-specific askpass or wallet
+integration. An empty agent is valid until a key is actually used, and the
 installer never runs `ssh-add` eagerly.
 
 The created user's login shell is Zsh. `/etc/zsh/zshrc` initializes native Zsh
 completions and Starship from the managed `/etc/starship.toml`, which is pinned
 to Starship's official `plain-text-symbols` preset. User customization remains
 available through `~/.zshrc`, `~/.zshenv`, and user environment.d files; the
-installer creates none of those user files. FiraCode Nerd Font Mono is installed
-and selectable, but it is not selected automatically in Konsole, Plasma,
-editors, or global font configuration.
+installer creates none of those user files. Inter and JetBrains Mono are
+installed and selected by the managed desktop theme, but applications remain
+free to override them.
+
+For mixed compute and gaming use, keep container workloads labelled
+`com.spawn-arch.compute=true`. Before launching a game, use
+`spawn-game hybrid <command>` for PRIME offload or `spawn-game dgpu <command>`
+when the firmware MUX is already in dGPU-only mode. The wrapper switches to the
+`game` workspace and stops only those labelled compute containers after sudo
+authentication; it never touches unlabelled containers.
 
 Docker runs as a local system service with its Unix socket only. Container logs
 use the bounded `local` driver, and new containers inherit the daemon's
@@ -222,8 +242,8 @@ configured. Its unit wants and starts after both `network-online.target` and
 firewalld initialization.
 
 Firewalld uses the `spawn-workstation` default zone. It drops unsolicited inbound
-traffic and opens no services or ports. Network sharing, KDE Connect, SSH access,
-game streaming, and published container ports require explicit operator action.
+traffic and opens no services or ports. Network sharing, SSH access, game
+streaming, and published container ports require explicit operator action.
 Docker manages separate forwarding rules, so publishing a container port is a
 network exposure decision and is not constrained by the workstation zone alone.
 Persistent journald storage is compressed, limited to 1 GiB while reserving 2
@@ -321,6 +341,9 @@ vulkaninfo --summary
 prime-run glxinfo -B
 nvidia-smi
 systemctl --user is-active pipewire pipewire-pulse wireplumber ssh-agent
+systemctl --user is-active spawn-quickshell spawn-hypridle spawn-swaync
+hyprctl -j monitors
+hyprctl -j workspaces
 ssh-add -l
 sudo docker info
 sudo firewall-cmd --get-default-zone
@@ -336,9 +359,11 @@ journalctl -b -p warning
 Acceptance requires all of the following:
 
 - The selected entry and command line belong to the current unified kernel image.
+- `uname -r` reports Linux 7.2 or newer.
 - The active Btrfs root is the filesystem default, and mount verification is clean.
 - zram is the only swap and has priority 100.
-- The session is a non-root local Plasma Wayland session.
+- The session is a non-root local Hyprland Wayland session; the panel, helpers,
+  and portal respond through the user session.
 - Intel is the default renderer for OpenGL and Vulkan.
 - NVIDIA works through PRIME offload, and `nvidia-smi` is healthy.
 - The initial power profile is `balanced` and required services are active.

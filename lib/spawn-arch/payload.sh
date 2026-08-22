@@ -30,4 +30,7 @@ payload_install() {
       chmod 0755 -- "$target_root/usr/local/lib/spawn-arch/preserve-uki.sh" || return $?
     fi
   fi
+  if [[ -d "$target_root/etc/skel/.local/bin" ]]; then
+    find "$target_root/etc/skel/.local/bin" -type f -exec chmod 0755 -- {} + || return $?
+  fi
 }

@@ -1,0 +1,34 @@
+@import url("swaync-colors.css");
+
+* {
+  font-family: Inter;
+  font-size: 13px;
+}
+
+.notification-row,
+.control-center {
+  background: @surface;
+  border: 1px solid @focus;
+  border-radius: 12px;
+  color: @text;
+}
+
+.notification,
+.widget-title,
+.widget-dnd {
+  background: @surface_raised;
+  border-radius: 8px;
+  color: @text;
+}
+
+.summary,
+.body,
+label {
+  color: @text;
+}
+
+button {
+  background: @accent;
+  border-radius: 8px;
+  color: @accent_text;
+}

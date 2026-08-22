@@ -42,8 +42,8 @@ verify_build_report() {
   _verification_add_check checks luks_mapping 'root mapper and embedded LUKS UUID agree' \
     hardware_check_luks_mapping "$expected_cmdline"
   _verification_add_check checks bootloader 'systemd-boot sees current and last-good' hardware_check_bootloader
-  _verification_add_check checks plasma_wayland 'active local non-root Plasma Wayland session' \
-    hardware_check_plasma_wayland "$session_observations"
+  _verification_add_check checks hyprland_wayland 'active local non-root Hyprland Wayland session, shell helpers, and portal' \
+    hardware_check_hyprland_wayland "$session_observations"
   _verification_add_check checks intel_glx 'default OpenGL renderer is Intel' \
     hardware_check_intel_glx "$session_observations"
   _verification_add_check checks intel_vulkan 'default Vulkan renderer is Intel' \
@@ -57,12 +57,12 @@ verify_build_report() {
     hardware_check_boot_ui "$expected_cmdline"
   _verification_add_check checks service_policy 'Docker ordering and unused pcrlogin policy are active' \
     hardware_check_service_policy
-  _verification_add_check checks audio 'PipeWire audio services are active in the Plasma session' \
+  _verification_add_check checks audio 'PipeWire audio services are active in the Hyprland session' \
     hardware_check_audio "$session_observations"
   _verification_add_check checks ssh_agent 'OpenSSH agent service and runtime socket are available' \
     hardware_check_ssh_agent "$session_observations"
-  _verification_add_check checks ssh_wallet 'KWallet askpass environment and OpenSSH add-to-agent policy are active' \
-    hardware_check_ssh_wallet "$session_observations"
+  _verification_add_check checks ssh_agent_policy 'OpenSSH add-to-agent policy is active without a desktop-specific askpass' \
+    hardware_check_ssh_agent_policy "$session_observations"
   _verification_add_check checks shell 'global Zsh completion and Starship initialization work without user dotfiles' \
     hardware_check_shell "$session_observations"
   _verification_add_check checks docker 'local sudo-only Docker daemon and opt-in NVIDIA runtime are healthy' \

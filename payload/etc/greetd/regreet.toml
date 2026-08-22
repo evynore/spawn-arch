@@ -1,0 +1,20 @@
+skip_selection = false
+
+[GTK]
+application_prefer_dark_theme = true
+cursor_theme_name = "Adwaita"
+cursor_blink = true
+font_name = "Inter 13"
+icon_theme_name = "Adwaita"
+theme_name = "Adwaita"
+
+[commands]
+reboot = ["loginctl", "reboot"]
+poweroff = ["loginctl", "poweroff"]
+
+[appearance]
+greeting_msg = "Spawn Arch"
+
+[widget.clock]
+format = "%a %H:%M"
+resolution = "500ms"

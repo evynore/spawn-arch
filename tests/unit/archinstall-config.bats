@@ -17,6 +17,7 @@ setup() {
   jq -e -f "$REPO_ROOT/tests/fixtures/archinstall/expected-shape.jq" "$output"
   jq -e --slurpfile packages <(packages_json "$REPO_ROOT/config/packages.txt") \
     '.packages == $packages[0]' "$output"
+  jq -e '(has("profile_config") | not) and (.services | index("greetd"))' "$output"
   [ "$(stat -c %a "$output")" = 600 ]
 }
 

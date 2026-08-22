@@ -42,7 +42,7 @@ needles = [
     "./spawn-arch verify /mnt",
     "systemctl reboot",
     "LUKS passphrase",
-    "Plasma Wayland",
+    "Hyprland",
     "sudo spawn-arch verify --bless",
 ]
 position = -1
@@ -124,17 +124,18 @@ PY
   grep -Fq 'Do not bless the boot' "$README"
 }
 
-@test "README documents KWallet first use and the managed Zsh override boundary" {
-  grep -Fq 'ksshaskpass' "$README"
-  grep -Fq 'Remember password' "$README"
-  grep -Fq 'password-based Plasma login' "$README"
-  grep -Fq 'fingerprint-only login' "$README"
+@test "README documents the managed Hyprland profile and Zsh override boundary" {
+  grep -Fq 'Quickshell' "$README"
+  grep -Fq 'Hyprlauncher' "$README"
+  grep -Fq 'spawn-game hybrid' "$README"
+  grep -Fq 'desktop-specific askpass' "$README"
   grep -Fq 'AddKeysToAgent yes' "$README"
   grep -Fq '/etc/zsh/zshrc' "$README"
   grep -Fq '/etc/starship.toml' "$README"
   grep -Fq '~/.zshrc' "$README"
-  grep -Fq 'FiraCode Nerd Font Mono' "$README"
-  grep -Fq 'not selected automatically' "$README"
+  grep -Fq 'Inter and JetBrains Mono' "$README"
+  grep -Fq 'applications remain' "$README"
+  grep -Fq 'free to override them.' "$README"
 }
 
 @test "release builder creates deterministic tagged archives with provenance" {

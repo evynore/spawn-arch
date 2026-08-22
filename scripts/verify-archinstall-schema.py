@@ -71,8 +71,11 @@ def main() -> int:
             "five Btrfs subvolumes did not survive parsing")
     require(disk_config["disk_encryption"]["partitions"] == [root_partition["obj_id"]],
             "LUKS partition reference did not survive parsing")
-    require(roundtrip_config["profile_config"]["profile"]["details"] == ["KDE Plasma"],
-            "KDE profile did not survive parsing")
+    require("profile_config" not in roundtrip_config,
+            "Archinstall desktop profile must remain unset for the managed Hyprland session")
+    require(roundtrip_config["services"] == [
+        "NetworkManager", "bluetooth", "firewalld", "power-profiles-daemon", "greetd"
+    ], "managed service set did not survive parsing")
     require(roundtrip_config["swap"] == {"enabled": False, "algorithm": "zstd"},
             "disabled Archinstall zram did not survive parsing")
     require("root_enc_password" not in roundtrip_credentials, "root became unlocked after parsing")

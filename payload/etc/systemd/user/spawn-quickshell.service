@@ -1,0 +1,12 @@
+[Unit]
+Description=Spawn Arch Quickshell presentation shell
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/qs -p %h/.config/quickshell/spawn-arch
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

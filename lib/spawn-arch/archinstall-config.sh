@@ -86,15 +86,6 @@ archinstall_user_config() {
             removable: false
           },
           network_config: {type: "nm"},
-          profile_config: {
-            gfx_driver: "Nvidia (open kernel module for newer GPUs, Turing+)",
-            greeter: "plasma-login-manager",
-            profile: {
-              main: "Desktop",
-              details: ["KDE Plasma"],
-              custom_settings: {"KDE Plasma": {plasma_flavor: "plasma-meta"}}
-            }
-          },
           app_config: {
             bluetooth_config: {enabled: true},
             audio_config: {audio: "pipewire"},
@@ -154,7 +145,7 @@ archinstall_user_config() {
           kernels: ["linux"],
           ntp: true,
           packages: $packages,
-          services: ["NetworkManager", "bluetooth", "firewalld", "power-profiles-daemon"],
+          services: ["NetworkManager", "bluetooth", "firewalld", "power-profiles-daemon", "greetd"],
           swap: {enabled: false, algorithm: "zstd"},
           timezone: $plan.system.timezone,
           custom_commands: []

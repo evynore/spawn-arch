@@ -2,15 +2,7 @@
 (.locale_config == {kb_layout: "", sys_enc: "UTF-8", sys_lang: "en_US"}) and
 (.bootloader_config == {bootloader: "Systemd-boot", uki: true, removable: false}) and
 (.network_config == {type: "nm"}) and
-(.profile_config == {
-  gfx_driver: "Nvidia (open kernel module for newer GPUs, Turing+)",
-  greeter: "plasma-login-manager",
-  profile: {
-    main: "Desktop",
-    details: ["KDE Plasma"],
-    custom_settings: {"KDE Plasma": {plasma_flavor: "plasma-meta"}}
-  }
-}) and
+(has("profile_config") | not) and
 (.app_config == {
   bluetooth_config: {enabled: true},
   audio_config: {audio: "pipewire"},
@@ -19,6 +11,7 @@
   fonts_config: {fonts: ["noto-fonts", "noto-fonts-emoji", "ttf-liberation"]}
 }) and
 (.swap == {enabled: false, algorithm: "zstd"}) and
+(.services == ["NetworkManager", "bluetooth", "firewalld", "power-profiles-daemon", "greetd"]) and
 (.custom_commands == []) and
 (.kernels == ["linux"]) and
 (.ntp == true) and

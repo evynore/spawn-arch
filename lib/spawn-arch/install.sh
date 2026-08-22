@@ -226,7 +226,7 @@ cmd_plan() {
   log_info "non-destructive plan written to $plan_path"
   jq -r '
     "Target: \(.target.device_at_plan_time) serial=\(.target.identity.serial)",
-    "Profile: KDE Plasma, Intel default + NVIDIA offload",
+    "Profile: Hyprland, Intel default + NVIDIA offload",
     "Subvolumes: \(.storage.subvolumes | join(", "))"
   ' <<<"$materialized_plan" >&2
   jq -r '"Packages: \(.packages | length); services: \(.services | join(", "))"' "$user_config" >&2

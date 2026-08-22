@@ -17,15 +17,18 @@ teardown() {
   rm -rf -- "$SPAWN_QEMU_RUNTIME"
 }
 
-@test "first-boot guest contract covers KWallet SSH and shell baseline without secrets" {
+@test "first-boot guest contract covers the Hyprland profile and shell baseline without secrets" {
   local scenario="$REPO_ROOT/tests/integration/guest-scenarios.sh"
   local assertion="$REPO_ROOT/tests/integration/qemu-install.bats"
 
-  grep -Fq 'pacman -Q ksshaskpass kwallet-pam zsh zsh-completions starship ttf-firacode-nerd' "$scenario"
+  grep -Fq 'pacman -Q hyprland uwsm greetd greetd-regreet cage quickshell hyprlauncher hyprlock hypridle hyprpolkitagent' "$scenario"
+  grep -Fq 'xdg-desktop-portal xdg-desktop-portal-hyprland xdg-desktop-portal-gtk swaync cliphist wl-clipboard hyprshot hyprpaper' "$scenario"
   grep -Fq "getent passwd evynore | cut -d: -f7" "$scenario"
   grep -Fq "ssh -G example.invalid" "$scenario"
   grep -Fq 'zsh -n /etc/zsh/zshrc' "$scenario"
-  grep -Fq 'FiraCodeNerdFontMono-Regular.ttf' "$scenario"
+  grep -Fq '/usr/share/fonts/inter/Inter.ttc' "$scenario"
+  grep -Fq '/usr/share/fonts/TTF/JetBrainsMono-Regular.ttf' "$scenario"
+  grep -Fq '/home/evynore/.config/hypr/hyprland.lua' "$scenario"
   grep -Fq '/home/evynore/.zshrc' "$scenario"
   grep -Fq '/home/evynore/.config/starship.toml' "$scenario"
   grep -Fq '.first_boot.developer_session_baseline' "$assertion"

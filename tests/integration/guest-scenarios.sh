@@ -73,10 +73,16 @@ live_install() {
 
 first_boot_assert() {
   local luks_version root_options active_id default_id mount_dir swap_json boot_list snapper_json
-  local pam_file service subvolume
+  local service subvolume
   local -a services=(
-    NetworkManager bluetooth firewalld plasmalogin
+    NetworkManager bluetooth firewalld greetd
     switcheroo-control power-profiles-daemon docker arch-audit.timer
+  )
+  local -a user_services=(
+    ssh-agent.service
+    spawn-quickshell.service spawn-hypridle.service spawn-hyprpolkitagent.service
+    spawn-swaync.service spawn-cliphist-text.service spawn-cliphist-image.service
+    spawn-hyprpaper.service
   )
   local -a expected_subvolumes=(@ @home @log @pkg @snapshots)
 
@@ -115,16 +121,24 @@ first_boot_assert() {
     systemctl is-enabled "$service" >/dev/null
   done
   systemctl is-active --quiet docker.service
-  systemctl --global is-enabled ssh-agent.service >/dev/null
+  for service in "${user_services[@]}"; do
+    systemctl --global is-enabled "$service" >/dev/null
+  done
   ! systemctl is-enabled sshd.service >/dev/null 2>&1
-  pacman -Q ksshaskpass kwallet-pam zsh zsh-completions starship ttf-firacode-nerd >/dev/null
+  pacman -Q hyprland uwsm greetd greetd-regreet cage quickshell hyprlauncher hyprlock hypridle hyprpolkitagent \
+    xdg-desktop-portal xdg-desktop-portal-hyprland xdg-desktop-portal-gtk swaync cliphist wl-clipboard hyprshot hyprpaper \
+    foot thunar gvfs tumbler brightnessctl inter-font ttf-jetbrains-mono zsh zsh-completions starship >/dev/null
+  grep -Fx 'user = "greeter"' /etc/greetd/config.toml
+  grep -Fx 'Exec=uwsm start -N Hyprland -eD Hyprland -- Hyprland' /usr/share/wayland-sessions/spawn-hyprland.desktop
   grep -Fx 'SSH_AUTH_SOCK=${XDG_RUNTIME_DIR}/ssh-agent.socket' /etc/environment.d/10-ssh-agent.conf
-  grep -Fx 'SSH_ASKPASS=/usr/bin/ksshaskpass' /etc/environment.d/10-ssh-agent.conf
-  grep -Fx 'SSH_ASKPASS_REQUIRE=prefer' /etc/environment.d/10-ssh-agent.conf
   grep -Fx 'STARSHIP_CONFIG=/etc/starship.toml' /etc/environment.d/20-starship.conf
   [[ "$(getent passwd evynore | cut -d: -f7)" == /usr/bin/zsh ]]
-  [[ -x /usr/bin/ksshaskpass && -x /usr/bin/zsh ]]
-  [[ -r /usr/share/fonts/TTF/FiraCodeNerdFontMono-Regular.ttf ]]
+  [[ -x /usr/bin/zsh ]]
+  [[ -r /usr/share/fonts/inter/Inter.ttc ]]
+  [[ -r /usr/share/fonts/TTF/JetBrainsMono-Regular.ttf ]]
+  [[ -r /home/evynore/.config/hypr/hyprland.lua ]]
+  [[ -r /home/evynore/.config/quickshell/spawn-arch/shell.qml ]]
+  [[ -x /home/evynore/.local/bin/spawn-game ]]
   [[ ! -e /home/evynore/.zshrc ]]
   [[ ! -e /home/evynore/.config/starship.toml ]]
   zsh -n /etc/zsh/zshrc
@@ -132,13 +146,6 @@ first_boot_assert() {
     '04f185c124b48f0d4320adeed0f7471add110fcda6594b352ed464eb95bf1ed3' \
     '/etc/starship.toml' | sha256sum -c -
   ssh -G example.invalid | grep -Fxq 'addkeystoagent yes'
-  if [[ -r /etc/pam.d/plasmalogin ]]; then
-    pam_file=/etc/pam.d/plasmalogin
-  else
-    pam_file=/usr/lib/pam.d/plasmalogin
-  fi
-  grep -Eq '^[[:space:]]*-?auth[[:space:]].*pam_kwallet5\.so([[:space:]]|$)' "$pam_file"
-  grep -Eq '^[[:space:]]*-?session[[:space:]].*pam_kwallet5\.so([[:space:]]|$)' "$pam_file"
   [[ "$(firewall-cmd --get-default-zone)" == spawn-workstation ]]
   [[ "$(firewall-cmd --get-log-denied)" == unicast ]]
   [[ -d /var/log/journal ]]
@@ -152,7 +159,7 @@ first_boot_assert() {
     --argjson luks_version "$luks_version" \
     --argjson subvolumes '["@", "@home", "@log", "@pkg", "@snapshots"]' \
     --argjson services '[
-      "NetworkManager", "bluetooth", "firewalld", "plasmalogin",
+      "NetworkManager", "bluetooth", "firewalld", "greetd",
       "switcheroo-control", "power-profiles-daemon", "docker", "arch-audit.timer"
     ]' '{
       luks_version: $luks_version,
@@ -172,10 +179,10 @@ first_boot_assert() {
         sysctl: true
       },
       developer_session_baseline: {
-        kwallet_ssh: true,
+        hyprland_profile: true,
         login_shell: "/usr/bin/zsh",
         starship_preset: "plain-text-symbols",
-        font: "FiraCode Nerd Font Mono",
+        font: "Inter + JetBrains Mono",
         user_dotfiles_untouched: true
       }
     }' >"$EXCHANGE_ROOT/first-boot.json"
@@ -239,7 +246,7 @@ update_stage() {
 }
 
 install_qemu_hardware_adapter() {
-  hardware_check_plasma_wayland() { return 0; }
+  hardware_check_hyprland_wayland() { return 0; }
   hardware_check_intel_glx() { return 0; }
   hardware_check_intel_vulkan() { return 0; }
   hardware_check_nvidia_prime() { return 0; }
@@ -255,7 +262,7 @@ update_bless() {
   report="$(verify_build_report)"
   jq -e '
     .ok == true and
-    ([.checks[] | select(.name != "plasma_wayland" and .name != "intel_glx" and
+    ([.checks[] | select(.name != "hyprland_wayland" and .name != "intel_glx" and
       .name != "intel_vulkan" and .name != "nvidia_prime" and .name != "nvidia_smi") |
       .ok] | all)
   ' <<<"$report" >/dev/null
